@@ -255,7 +255,7 @@ fn finalize_batch_rejects_mismatched_lengths() {
 
     let (state, blinded) = client.blind(b"x", info, &mut OsRng).unwrap();
     let (evals, proof) = server
-        .blind_evaluate_batch(&mut OsRng, &[blinded.clone()], info)
+        .blind_evaluate_batch(&mut OsRng, std::slice::from_ref(&blinded), info)
         .unwrap();
 
     let res = client.finalize_batch(
@@ -459,7 +459,7 @@ fn rejects_oversized_input_and_info() {
     // Server blind_evaluate_batch: oversized info.
     assert_eq!(
         server
-            .blind_evaluate_batch(&mut OsRng, &[blinded.clone()], &too_long)
+            .blind_evaluate_batch(&mut OsRng, std::slice::from_ref(&blinded), &too_long)
             .unwrap_err(),
         Error::InputTooLong,
         "blind_evaluate_batch: oversized info not rejected"
