@@ -1,0 +1,138 @@
+# Workspace tooling for `poprf-ristretto`.
+#
+# Meta / lint:
+#   make headers          regenerate the FFI C header.
+#   make check-headers    fail if the checked-in header is stale (CI gate).
+#   make test             run the workspace test suite with all features.
+#   make clippy           run clippy across the workspace with `-D warnings`.
+#   make fmt              apply rustfmt to the workspace.
+#   make check-fmt        fail if rustfmt would modify any file.
+#
+# Build:
+#   make ffi-release      build the FFI cdylib (libpoprf_ristretto_ffi.so).
+#   make wasm             build the wasm package (target=bundler, release).
+#   make wasm-nodejs      build the wasm package for Node.js consumers.
+#
+# Publish:
+#   make publish-dry-run  cargo publish --dry-run for all three crates
+#                         (verifies packaging, tarball contents, deps).
+#
+# Housekeeping:
+#   make clean            `cargo clean` plus wipe wasm-pack pkg/ and pkg-node/.
+#
+# Real publishes (crates.io and npm) are intentionally not exposed as
+# Makefile targets. The commands are:
+#
+#   # crates.io, in dependency order, sleeping ~45s between to let the
+#   # sparse index catch up:
+#   cargo publish -p poprf-ristretto
+#   cargo publish -p poprf-ristretto-ffi
+#   cargo publish -p poprf-ristretto-wasm
+#
+#   # npm (rewrite pkg/package.json `name` to @brave-intl/poprf-ristretto-wasm
+#   # then `npm publish --access public` from pkg/):
+#   make wasm
+#   (cd poprf-ristretto-wasm/pkg && npm publish --access public)
+#
+# `cargo`, `cbindgen`, and `wasm-pack` are invoked through the
+# env-overridable variables below so CI can pin tool versions.
+
+FFI_DIR        := poprf-ristretto-ffi
+FFI_HEADER     := $(FFI_DIR)/include/poprf_ristretto_ffi.h
+FFI_CBINDGEN   := $(FFI_DIR)/cbindgen.toml
+WASM_DIR       := poprf-ristretto-wasm
+
+CBINDGEN  ?= cbindgen
+CARGO     ?= cargo
+WASM_PACK ?= wasm-pack
+
+.PHONY: all headers check-headers test clippy fmt check-fmt \
+        ffi-release wasm wasm-nodejs publish-dry-run clean
+
+all: headers test clippy
+
+headers:
+	@mkdir -p $(FFI_DIR)/include
+	$(CBINDGEN) --config $(FFI_CBINDGEN) --crate poprf-ristretto-ffi --output $(FFI_HEADER) 2>/dev/null
+
+# CI drift check. Regenerates into a temp file and diffs against the
+# checked-in header; any divergence (function added/renamed, signature
+# changed, doc comment edited) fails the build.
+check-headers:
+	@tmp=$$(mktemp); \
+	$(CBINDGEN) --config $(FFI_CBINDGEN) --crate poprf-ristretto-ffi --output $$tmp 2>/dev/null; \
+	if ! diff -u $(FFI_HEADER) $$tmp; then \
+		echo ""; \
+		echo "error: $(FFI_HEADER) is stale; run 'make headers' and commit the result." >&2; \
+		rm -f $$tmp; \
+		exit 1; \
+	fi; \
+	rm -f $$tmp
+
+test:
+	$(CARGO) test --workspace --all-features
+
+clippy:
+	$(CARGO) clippy --workspace --all-targets --all-features -- -D warnings
+
+fmt:
+	$(CARGO) fmt --all
+
+check-fmt:
+	$(CARGO) fmt --all -- --check
+
+# Build the FFI cdylib in release mode. Output:
+#   target/release/libpoprf_ristretto_ffi.so   (Linux)
+#   target/release/libpoprf_ristretto_ffi.dylib (macOS)
+# Workspace `[profile.release]` sets `panic = "abort"` to keep unwinding
+# from crossing the `extern "C"` boundary.
+ffi-release:
+	$(CARGO) build -p poprf-ristretto-ffi --release
+
+# Build the wasm package for browser/bundler consumers.
+#   make wasm          → $(WASM_DIR)/pkg/       (ESM, `import` from a bundler)
+#   make wasm-nodejs   → $(WASM_DIR)/pkg-node/  (CommonJS, `require()`)
+#
+# `wasm-pack` itself drives `cargo build --release --target wasm32-unknown-unknown`,
+# so the workspace release profile applies. The two targets use distinct
+# `--out-dir`s so consumers can keep both layouts side-by-side without one
+# overwriting the other.
+wasm:
+	cd $(WASM_DIR) && $(WASM_PACK) build --target bundler --release
+
+wasm-nodejs:
+	cd $(WASM_DIR) && $(WASM_PACK) build --target nodejs --release --out-dir pkg-node
+
+# Round-trip smoke test across the JS↔Rust boundary, run under Node.
+# Catches regressions in the `js_sys::Array` / `Uint8Array` / `JsValue`
+# glue that a native `cargo test` cannot exercise.
+wasm-test:
+	$(WASM_PACK) test --node $(WASM_DIR)
+
+# Verify each crate is packageable before tagging a release. Catches
+# dirty git state, missing tracked files, .gitignore over-restriction
+# (e.g. a fixture excluded by accident), missing metadata, and
+# cross-crate version pin mismatches.
+#
+# The core crate has no path dependencies and gets a full
+# `cargo publish --dry-run` (compiles against a stripped manifest and
+# verifies against the registry index).
+#
+# The binding crates path-depend on the core crate. If `poprf-ristretto`
+# is not resolvable from the registry, `cargo publish --dry-run` for the
+# bindings fails before any packaging checks run. The bindings therefore
+# use `cargo package --list`, which emits the would-be tarball file
+# listing — enough to verify packaging correctness without contacting
+# the registry.
+publish-dry-run:
+	$(CARGO) publish --dry-run --allow-dirty -p poprf-ristretto
+	@echo ""
+	@echo "==> poprf-ristretto-ffi tarball contents:"
+	$(CARGO) package --allow-dirty --list -p poprf-ristretto-ffi
+	@echo ""
+	@echo "==> poprf-ristretto-wasm tarball contents:"
+	$(CARGO) package --allow-dirty --list -p poprf-ristretto-wasm
+
+clean:
+	$(CARGO) clean
+	rm -rf $(WASM_DIR)/pkg $(WASM_DIR)/pkg-node

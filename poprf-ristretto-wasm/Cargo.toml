@@ -1,0 +1,39 @@
+[package]
+name = "poprf-ristretto-wasm"
+description = "wasm-bindgen bindings for poprf-ristretto (RFC 9497 POPRF / ristretto255-SHA512)"
+documentation = "https://docs.rs/poprf-ristretto-wasm"
+readme = "README.md"
+keywords = ["poprf", "rfc9497", "ristretto255", "wasm", "crypto"]
+categories = ["cryptography", "wasm", "api-bindings"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# See poprf-ristretto-ffi/Cargo.toml for why both `path` and `version`.
+poprf-ristretto = { path = "../poprf-ristretto", version = "0.1.0", default-features = false, features = ["std", "fast-dleq"] }
+# `getrandom`'s `js` feature wires `OsRng` to `crypto.getRandomValues` on
+# wasm32-unknown-unknown; without it `rand_core::OsRng` panics at runtime.
+getrandom = { version = "0.2", default-features = false, features = ["js"] }
+rand_core = { version = "0.6", default-features = false, features = ["std"] }
+base64 = { version = "0.22", default-features = false, features = ["std"] }
+wasm-bindgen = { version = "0.2", default-features = false, features = ["std"] }
+js-sys = { version = "0.3", default-features = false }
+
+[dev-dependencies]
+# Run via `wasm-pack test --node poprf-ristretto-wasm`.
+# wasm-bindgen-test 0.3.x lockstep with wasm-bindgen 0.2.x; resolver
+# picks a matching minor against the workspace's pinned wasm-bindgen.
+wasm-bindgen-test = "0.3"
+# Server-side eval (PoprfServer) lives in the core crate and is not part
+# of the wasm shim's public surface; pulled in for the smoke test only.
+poprf-ristretto = { path = "../poprf-ristretto", version = "0.1.0", features = ["std", "fast-dleq"] }

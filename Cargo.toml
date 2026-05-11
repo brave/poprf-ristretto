@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+    "poprf-ristretto",
+    "poprf-ristretto-ffi",
+    "poprf-ristretto-wasm",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/brave-intl/poprf-ristretto"
+homepage = "https://github.com/brave-intl/poprf-ristretto"
+
+# Abort on panic in release builds.
+#
+# Required for the `poprf-ristretto-ffi` cdylib: unwinding across an
+# `extern "C"` boundary is undefined behavior. With `panic = "abort"`
+# a panic in Rust terminates the process instead of unwinding into the
+# C caller. Without this, every `pub unsafe extern "C" fn` would need
+# `std::panic::catch_unwind` wrappers to be sound.
+#
+# Also desirable for `poprf-ristretto-wasm` (smaller `.wasm` binary;
+# wasm-bindgen's own panic hook reports the panic message to JS without
+# requiring unwinding).
+#
+# `[profile.test]` and `[profile.bench]` keep the default
+# `panic = "unwind"` so `cargo test` and `cargo bench` can report
+# failures normally.
+[profile.release]
+panic = "abort"

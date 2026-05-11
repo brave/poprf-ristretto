@@ -1,0 +1,62 @@
+[package]
+name = "poprf-ristretto"
+description = "RFC 9497 POPRF over ristretto255-SHA512"
+documentation = "https://docs.rs/poprf-ristretto"
+readme = "README.md"
+keywords = ["poprf", "rfc9497", "ristretto255", "oprf", "crypto"]
+categories = ["cryptography"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = ["std", "fast-dleq", "precomputed-tables"]
+std = ["alloc", "rand_core/std", "subtle/std", "zeroize/std"]
+alloc = []
+serde = ["alloc", "dep:serde", "dep:serde_bytes"]
+
+# Vartime multi-scalar multiplication in DLEQ composite computation
+# (RFC 9497 §2.2.1, §2.2.2). M = Σ dᵢ·Cᵢ and Z = Σ dᵢ·Dᵢ are computed
+# via curve25519_dalek's Pippenger MSM (vartime). Safe because the dᵢ
+# scalars are derived from a public Fiat-Shamir transcript. Wire format
+# and RFC 9497 Appendix A test vectors are unchanged.
+fast-dleq = []
+
+# Precomputed multiples of the ristretto255 base point, used in `Blind`,
+# `BlindEvaluate`, and `DeriveKeyPair`. Adds ~30 KB of read-only data to
+# the compiled binary in exchange for a substantial speed-up on those
+# operations. Disable for size-constrained builds.
+precomputed-tables = ["curve25519-dalek/precomputed-tables"]
+
+[dependencies]
+curve25519-dalek = { version = "4.1", default-features = false, features = ["digest", "rand_core", "alloc", "zeroize"] }
+sha2 = { version = "0.10", default-features = false }
+elliptic-curve = { version = "0.13", default-features = false, features = ["hash2curve"] }
+digest = { version = "0.10", default-features = false }
+rand_core = { version = "0.6", default-features = false }
+subtle = { version = "2.5", default-features = false }
+zeroize = { version = "1.7", default-features = false, features = ["derive"] }
+serde = { version = "1", optional = true, default-features = false, features = ["derive"] }
+serde_bytes = { version = "0.11", optional = true, default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+bincode = "1.3"
+rand_core = { version = "0.6", features = ["std", "getrandom"] }
+criterion = { version = "0.5", default-features = false, features = ["html_reports", "cargo_bench_support", "plotters"] }
+
+[[bench]]
+name = "poprf"
+harness = false
+
+[[example]]
+name = "poprf_handshake"

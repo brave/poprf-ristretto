@@ -1,0 +1,8 @@
+# wasm32 targets must NOT inherit any native-CPU rustflags from a parent
+# workspace config. Explicitly enable reference-types so wasm-bindgen 0.2.100+
+# can properly generate and export its externref table management functions
+# (__externref_table_alloc / __externref_table_dealloc). Without this flag
+# those symbols are dead-code eliminated and wasm-pack fails with:
+#   error: failed to find the __wbindgen_externref_table_dealloc function
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+reference-types"]

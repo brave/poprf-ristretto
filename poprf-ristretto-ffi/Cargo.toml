@@ -1,0 +1,31 @@
+[package]
+name = "poprf-ristretto-ffi"
+description = "C ABI bindings for poprf-ristretto (RFC 9497 POPRF / ristretto255-SHA512)"
+documentation = "https://docs.rs/poprf-ristretto-ffi"
+readme = "README.md"
+keywords = ["poprf", "rfc9497", "ristretto255", "ffi", "crypto"]
+categories = ["cryptography", "api-bindings", "external-ffi-bindings"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lib]
+name = "poprf_ristretto_ffi"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# `version` alongside `path` is required for publishing: `path` wins during
+# workspace builds, `version` is used by crates.io consumers and
+# `cargo publish --dry-run`.
+poprf-ristretto = { path = "../poprf-ristretto", version = "0.1.0", default-features = false, features = ["std", "fast-dleq"] }
+base64 = { version = "0.22", default-features = false, features = ["std"] }
+rand_core = { version = "0.6", default-features = false, features = ["std", "getrandom"] }
+
+[dev-dependencies]
+poprf-ristretto = { path = "../poprf-ristretto", version = "0.1.0", features = ["std"] }

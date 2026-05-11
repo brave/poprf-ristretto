@@ -1,0 +1,7 @@
+/target/
+
+# wasm-pack build artifacts (`make wasm` / `make wasm-nodejs`). Regenerate
+# locally; do not commit.
+poprf-ristretto-wasm/pkg/
+poprf-ristretto-wasm/pkg-node/
+
