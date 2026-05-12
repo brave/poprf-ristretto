@@ -11,8 +11,9 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/brave-intl/poprf-ristretto"
-homepage = "https://github.com/brave-intl/poprf-ristretto"
+# `repository` and `homepage` intentionally omitted pre-publish:
+# the crate is not yet at its canonical location and any placeholder
+# URL would be misleading. Both fields are restored when publishing.
 
 # Abort on panic in release builds.
 #

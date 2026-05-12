@@ -10,7 +10,7 @@
 #
 # Build:
 #   make ffi-release      build the FFI cdylib (libpoprf_ristretto_ffi.so).
-#   make wasm             build the wasm package (target=bundler, release).
+#   make wasm             build the wasm package (target=web, release).
 #   make wasm-nodejs      build the wasm package for Node.js consumers.
 #
 # Publish:
@@ -29,8 +29,8 @@
 #   cargo publish -p poprf-ristretto-ffi
 #   cargo publish -p poprf-ristretto-wasm
 #
-#   # npm (rewrite pkg/package.json `name` to @brave-intl/poprf-ristretto-wasm
-#   # then `npm publish --access public` from pkg/):
+#   # npm: `make wasm` already scopes pkg/package.json to
+#   # @brave-intl/poprf-ristretto-wasm, so publishing is one step:
 #   make wasm
 #   (cd poprf-ristretto-wasm/pkg && npm publish --access public)
 #
@@ -47,7 +47,7 @@ CARGO     ?= cargo
 WASM_PACK ?= wasm-pack
 
 .PHONY: all headers check-headers test clippy fmt check-fmt \
-        ffi-release wasm wasm-nodejs publish-dry-run clean
+        ffi-release wasm wasm-nodejs wasm-test publish-dry-run clean
 
 all: headers test clippy
 
@@ -89,16 +89,23 @@ check-fmt:
 ffi-release:
 	$(CARGO) build -p poprf-ristretto-ffi --release
 
-# Build the wasm package for browser/bundler consumers.
-#   make wasm          → $(WASM_DIR)/pkg/       (ESM, `import` from a bundler)
-#   make wasm-nodejs   → $(WASM_DIR)/pkg-node/  (CommonJS, `require()`)
+# Build the wasm package for browser consumers.
+#   make wasm  → $(WASM_DIR)/pkg/  (ESM with `initSync` / `init()`)
 #
 # `wasm-pack` itself drives `cargo build --release --target wasm32-unknown-unknown`,
-# so the workspace release profile applies. The two targets use distinct
-# `--out-dir`s so consumers can keep both layouts side-by-side without one
-# overwriting the other.
+# so the workspace release profile applies. `--target web` emits glue that
+# is directly callable from a browser `<script type="module">` or from
+# any runtime that supports raw `WebAssembly.instantiate` (no bundler
+# required).
+#
+# Post-build, `pkg/package.json` is rewritten to scope the npm name so
+# the on-disk identity matches the published package name. `jq` is a
+# standard tool on CI images and developer environments.
 wasm:
-	cd $(WASM_DIR) && $(WASM_PACK) build --target bundler --release
+	cd $(WASM_DIR) && $(WASM_PACK) build --target web --release
+	@jq '.name = "@brave-intl/poprf-ristretto-wasm"' \
+		$(WASM_DIR)/pkg/package.json > $(WASM_DIR)/pkg/package.json.tmp \
+		&& mv $(WASM_DIR)/pkg/package.json.tmp $(WASM_DIR)/pkg/package.json
 
 wasm-nodejs:
 	cd $(WASM_DIR) && $(WASM_PACK) build --target nodejs --release --out-dir pkg-node

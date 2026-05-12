@@ -35,8 +35,8 @@ cargo install wasm-pack
 From the workspace root:
 
 ```sh
-make wasm         # wasm-pack build --target bundler  → poprf-ristretto-wasm/pkg/
-make wasm-nodejs  # wasm-pack build --target nodejs   → poprf-ristretto-wasm/pkg-node/
+make wasm         # wasm-pack build --target web     → poprf-ristretto-wasm/pkg/
+make wasm-nodejs  # wasm-pack build --target nodejs  → poprf-ristretto-wasm/pkg-node/
 ```
 
 Each output directory contains `package.json`, JS glue, TypeScript
@@ -85,6 +85,10 @@ const outputs = finalizeBatch(
 );
 // outputs[i] is the base64-encoded 64-byte POPRF output for input i.
 ```
+
+`init()` (the default export) fetches and instantiates the `.wasm`
+binary. A synchronous variant `initSync({ module: wasmBytes })` is also
+exported for environments where the bytes are already in memory.
 
 ### Node.js
 

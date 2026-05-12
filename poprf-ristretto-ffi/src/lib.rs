@@ -4,9 +4,9 @@
 //! defined in RFC 9497. The header (`include/poprf_ristretto_ffi.h`) is
 //! generated from this file via `cbindgen` and checked in.
 //!
-//! See the crate-level [README](https://github.com/brave-intl/poprf-ristretto/tree/main/poprf-ristretto-ffi#readme)
-//! for the object model, ownership rules, and a worked C example. Each
-//! `pub unsafe extern "C" fn` below carries its own `# Safety` block.
+//! See the crate-level README for the object model, ownership rules,
+//! and a worked C example. Each `pub unsafe extern "C" fn` below
+//! carries its own `# Safety` block.
 
 use core::cell::RefCell;
 use core::ffi::{c_char, c_int};

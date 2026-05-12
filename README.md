@@ -1,6 +1,6 @@
 # poprf-ristretto
 
-[![CI](https://github.com/brave-intl/poprf-ristretto/actions/workflows/ci.yml/badge.svg)](https://github.com/brave-intl/poprf-ristretto/actions)
+[![CI](https://github.com/acatarineu/poprf-ristretto/actions/workflows/ci.yml/badge.svg)](https://github.com/acatarineu/poprf-ristretto/actions)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
 A Rust implementation of the **Partially-Oblivious Pseudorandom Function
