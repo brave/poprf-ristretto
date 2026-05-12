@@ -24,7 +24,7 @@ crate-type = ["cdylib", "rlib"]
 # workspace builds, `version` is used by crates.io consumers and
 # `cargo publish --dry-run`.
 poprf-ristretto = { path = "../poprf-ristretto", version = "0.1.0", default-features = false, features = ["std", "fast-dleq"] }
-base64 = { version = "0.22", default-features = false, features = ["std"] }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
 rand_core = { version = "0.6", default-features = false, features = ["std", "getrandom"] }
 
 [dev-dependencies]
