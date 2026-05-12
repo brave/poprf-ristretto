@@ -1,6 +1,6 @@
 //! Round-trip tests for the optional `serde` feature.
 //!
-//! Binary formats (bincode) use raw bytes; human-readable formats (JSON) use
+//! Binary formats (postcard) use raw bytes; human-readable formats (JSON) use
 //! lowercase hex strings.
 
 #![cfg(feature = "serde")]
@@ -34,15 +34,15 @@ fn fresh() -> (
 }
 
 #[test]
-fn bincode_roundtrip_all_wire_types() {
+fn postcard_roundtrip_all_wire_types() {
     let (server, _client, state, blinded, evaluated, proof, output) = fresh();
     let pk = server.public_key();
     let sk = server.secret_key().clone();
 
     macro_rules! rt {
         ($v:expr, $t:ty) => {{
-            let bytes = bincode::serialize(&$v).expect("serialize");
-            let parsed: $t = bincode::deserialize(&bytes).expect("deserialize");
+            let bytes = postcard::to_allocvec(&$v).expect("serialize");
+            let parsed: $t = postcard::from_bytes(&bytes).expect("deserialize");
             assert_eq!(parsed.to_bytes(), $v.to_bytes(), stringify!($t));
         }};
     }
@@ -55,8 +55,8 @@ fn bincode_roundtrip_all_wire_types() {
     rt!(state, PoprfBlindState);
 
     // PoprfOutput uses as_bytes
-    let out_bytes = bincode::serialize(&output).unwrap();
-    let parsed: PoprfOutput = bincode::deserialize(&out_bytes).unwrap();
+    let out_bytes = postcard::to_allocvec(&output).unwrap();
+    let parsed: PoprfOutput = postcard::from_bytes(&out_bytes).unwrap();
     assert_eq!(parsed, output);
 }
 
