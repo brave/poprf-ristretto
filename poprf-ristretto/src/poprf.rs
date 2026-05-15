@@ -1,4 +1,5 @@
-//! POPRF protocol (RFC 9497 §3.3.3).
+//! POPRF protocol (see: RFC 9497 §3.3.3).
+//! https://www.rfc-editor.org/rfc/rfc9497.txt
 
 use alloc::vec::Vec;
 use core::fmt;
@@ -11,11 +12,11 @@ use sha2::Sha512;
 use subtle::{Choice, ConstantTimeEq};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::dleq::{Proof, generate_proof, generate_proof_with_r, verify_proof};
+use crate::dleq::{generate_proof, generate_proof_with_r, verify_proof, Proof};
 use crate::error::Error;
 use crate::group;
-use crate::key::{PublicKey, SecretKey, derive_key_pair, generate_key_pair};
-use crate::util::{HASH_TO_GROUP_DST, HASH_TO_SCALAR_DST, append_lp, check_lp_len, i2osp_2};
+use crate::key::{derive_key_pair, generate_key_pair, PublicKey, SecretKey};
+use crate::util::{append_lp, check_lp_len, i2osp_2, HASH_TO_GROUP_DST, HASH_TO_SCALAR_DST};
 
 /// SHA-512 output length, used as the POPRF output length (`Nh`).
 const HASH_LEN: usize = 64;
@@ -39,6 +40,7 @@ pub struct EvaluatedElement(pub(crate) RistrettoPoint);
 
 impl BlindedElement {
     /// Wire-format length: `Ne = 32` bytes.
+    /// See: OPRF(ristretto255, SHA-512)
     pub const LEN: usize = group::ELEMENT_LEN;
 
     /// Serialize.
@@ -93,7 +95,7 @@ impl fmt::Debug for EvaluatedElement {
 pub struct PoprfOutput(pub(crate) [u8; HASH_LEN]);
 
 impl PoprfOutput {
-    /// Output length: `Nh = 64` bytes for ristretto255-SHA512.
+    /// Output length: `Nh = 64` bytes for ristretto255-SHA512 (due to the hash).
     pub const LEN: usize = HASH_LEN;
 
     /// View the raw bytes.
@@ -115,6 +117,7 @@ impl PoprfOutput {
     }
 }
 
+// uses subtle
 impl ConstantTimeEq for PoprfOutput {
     #[inline]
     fn ct_eq(&self, other: &Self) -> Choice {
@@ -123,6 +126,7 @@ impl ConstantTimeEq for PoprfOutput {
 }
 
 impl PartialEq for PoprfOutput {
+    // uses subtle
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         bool::from(self.ct_eq(other))
@@ -206,7 +210,7 @@ impl fmt::Debug for PoprfBlindState {
     }
 }
 
-// ── client ────────────────────────────────────────────────────────────────────
+// ── client logic
 
 /// POPRF client.
 #[derive(Clone, Copy)]
@@ -216,6 +220,7 @@ pub struct PoprfClient {
 
 impl PoprfClient {
     /// `SetupPOPRFClient(identifier, pkS)` — RFC 9497 §3.2.
+    /// Takes as input the public key of the server.
     #[inline]
     #[must_use]
     pub fn new(pk: PublicKey) -> Self {
@@ -223,6 +228,7 @@ impl PoprfClient {
     }
 
     /// The server public key `pkS` this client was configured with.
+    /// Takes as input the public key of the server.
     #[inline]
     #[must_use]
     pub fn public_key(&self) -> PublicKey {
@@ -230,6 +236,8 @@ impl PoprfClient {
     }
 
     /// `Blind(input, info, pkS)` — RFC 9497 §3.3.3.
+    /// Takes as input the `input` which is the element to be blinded,
+    /// info, which is the public metadata.
     pub fn blind<R: RngCore + CryptoRng>(
         &self,
         input: &[u8],
@@ -255,6 +263,7 @@ impl PoprfClient {
         self.blind_with_inner(input, info, blind)
     }
 
+    // Auxiliary function for the public metadata
     fn blind_with_inner(
         &self,
         input: &[u8],
@@ -369,7 +378,7 @@ impl PoprfClient {
     }
 }
 
-// ── server ────────────────────────────────────────────────────────────────────
+// ── server logic
 
 /// POPRF server.
 ///
@@ -428,6 +437,8 @@ impl PoprfServer {
     }
 
     /// `BlindEvaluate(skS, blindedElement, info)` — RFC 9497 §3.3.3 (single token).
+    /// Takes as an input the blinded element given by the client
+    /// and the public metadata
     pub fn blind_evaluate<R: RngCore + CryptoRng>(
         &self,
         rng: &mut R,

@@ -11,7 +11,9 @@ fn main() {
     let server = PoprfServer::generate(&mut OsRng);
     let client = PoprfClient::new(server.public_key());
 
+    // the blinded element
     let input = b"private input";
+    // public metadata
     let info = b"public info";
 
     let (state, blinded) = client.blind(input, info, &mut OsRng).unwrap();
