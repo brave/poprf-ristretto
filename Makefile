@@ -124,13 +124,21 @@ wasm-pack-install:
 		test -x "$${CARGO_HOME:-$$HOME/.cargo}/bin/$(WASM_PACK)" || \
 		$(CARGO) install $(WASM_PACK) --version $(WASM_PACK_VERSION) --locked
 
+# Clean pkg/ before wasm-pack runs: it generates package.json's `files` array
+# by reading pkg/ for LICENSE* entries before copying them in, so leftover
+# files from a previous build leak into the manifest non-deterministically.
+# wasm-pack writes the LICENSE files but never lists them in `files` (it scans
+# pkg/ for them before copying them in), so we append them in a fixed order
+# via jq to keep the manifest filesystem-independent.
 wasm: wasm-pack-install
-	cd $(WASM_DIR) && $(WASM_BUILD_ENV) $(WASM_PACK) build --target web --profile release-wasm
-	@jq '.name = "@brave-intl/poprf-ristretto-wasm"' \
+	rm -rf $(WASM_DIR)/pkg
+	cd $(WASM_DIR) && $(WASM_BUILD_ENV) $(WASM_PACK) build --target web --profile release-wasm --scope brave-intl
+	@jq '.files += ["LICENSE-APACHE", "LICENSE-MIT"]' \
 		$(WASM_DIR)/pkg/package.json > $(WASM_DIR)/pkg/package.json.tmp \
 		&& mv $(WASM_DIR)/pkg/package.json.tmp $(WASM_DIR)/pkg/package.json
 
 wasm-nodejs: wasm-pack-install
+	rm -rf $(WASM_DIR)/pkg-node
 	cd $(WASM_DIR) && $(WASM_BUILD_ENV) $(WASM_PACK) build --target nodejs --profile release-wasm --out-dir pkg-node
 
 # Round-trip smoke test across the JS↔Rust boundary, run under Node.
