@@ -45,9 +45,11 @@ WASM_DIR       := poprf-ristretto-wasm
 CBINDGEN  ?= cbindgen
 CARGO     ?= cargo
 WASM_PACK ?= wasm-pack
+WASM_PACK_VERSION ?= 0.15.0
 
 .PHONY: all headers check-headers test clippy fmt check-fmt \
-        ffi-release wasm wasm-nodejs wasm-test publish-dry-run clean
+        ffi-release wasm wasm-nodejs wasm-test publish-dry-run clean \
+        wasm-pack-install
 
 all: headers test clippy
 
@@ -107,26 +109,35 @@ ffi-release:
 # Post-build, `pkg/package.json` is rewritten to scope the npm name so
 # the on-disk identity matches the published package name. `jq` is a
 # standard tool on CI images and developer environments.
-WASM_BUILD_ENV = CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS=" \
+# PATH prepend ensures a wasm-pack just installed by `wasm-pack-install`
+# is found by the recipe shell.
+WASM_BUILD_ENV = PATH="$${CARGO_HOME:-$$HOME/.cargo}/bin:$$PATH" \
+	CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS=" \
 	-C target-feature=+reference-types \
 	--remap-path-prefix $(CURDIR)=/build/src \
 	--remap-path-prefix $${CARGO_HOME:-$$HOME/.cargo}=/build/cargo \
 	--remap-path-prefix $$(rustc --print sysroot)=/build/rust"
 
-wasm:
+# Install the pinned wasm-pack if missing.
+wasm-pack-install:
+	@command -v $(WASM_PACK) >/dev/null 2>&1 || \
+		test -x "$${CARGO_HOME:-$$HOME/.cargo}/bin/$(WASM_PACK)" || \
+		$(CARGO) install $(WASM_PACK) --version $(WASM_PACK_VERSION) --locked
+
+wasm: wasm-pack-install
 	cd $(WASM_DIR) && $(WASM_BUILD_ENV) $(WASM_PACK) build --target web --profile release-wasm
 	@jq '.name = "@brave-intl/poprf-ristretto-wasm"' \
 		$(WASM_DIR)/pkg/package.json > $(WASM_DIR)/pkg/package.json.tmp \
 		&& mv $(WASM_DIR)/pkg/package.json.tmp $(WASM_DIR)/pkg/package.json
 
-wasm-nodejs:
+wasm-nodejs: wasm-pack-install
 	cd $(WASM_DIR) && $(WASM_BUILD_ENV) $(WASM_PACK) build --target nodejs --profile release-wasm --out-dir pkg-node
 
 # Round-trip smoke test across the JS↔Rust boundary, run under Node.
 # Catches regressions in the `js_sys::Array` / `Uint8Array` / `JsValue`
 # glue that a native `cargo test` cannot exercise.
-wasm-test:
-	$(WASM_PACK) test --node $(WASM_DIR)
+wasm-test: wasm-pack-install
+	PATH="$${CARGO_HOME:-$$HOME/.cargo}/bin:$$PATH" $(WASM_PACK) test --node $(WASM_DIR)
 
 # Verify each crate is packageable before tagging a release. Catches
 # dirty git state, missing tracked files, .gitignore over-restriction
