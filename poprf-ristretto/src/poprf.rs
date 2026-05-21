@@ -12,11 +12,11 @@ use sha2::Sha512;
 use subtle::{Choice, ConstantTimeEq};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::dleq::{generate_proof, generate_proof_with_r, verify_proof, Proof};
+use crate::dleq::{Proof, generate_proof, generate_proof_with_r, verify_proof};
 use crate::error::Error;
 use crate::group;
-use crate::key::{derive_key_pair, generate_key_pair, PublicKey, SecretKey};
-use crate::util::{append_lp, check_lp_len, i2osp_2, HASH_TO_GROUP_DST, HASH_TO_SCALAR_DST};
+use crate::key::{PublicKey, SecretKey, derive_key_pair, generate_key_pair};
+use crate::util::{HASH_TO_GROUP_DST, HASH_TO_SCALAR_DST, append_lp, check_lp_len, i2osp_2};
 
 /// SHA-512 output length, used as the POPRF output length (`Nh`).
 const HASH_LEN: usize = 64;
