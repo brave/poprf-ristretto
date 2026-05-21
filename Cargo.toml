@@ -31,3 +31,12 @@ homepage = "https://github.com/brave-experiments/poprf-ristretto"
 # failures normally.
 [profile.release]
 panic = "abort"
+
+# Reproducible-build profile for the published wasm artifact. `release`
+# defaults to `codegen-units = 16`, which lets parallel LLVM passes reorder
+# symbol emission and produce byte-different `.wasm` from the same source.
+# Selected by the Makefile `wasm` / `wasm-nodejs` recipes via
+# `wasm-pack build --profile release-wasm`.
+[profile.release-wasm]
+inherits = "release"
+codegen-units = 1

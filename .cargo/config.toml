@@ -4,5 +4,10 @@
 # (__externref_table_alloc / __externref_table_dealloc). Without this flag
 # those symbols are dead-code eliminated and wasm-pack fails with:
 #   error: failed to find the __wbindgen_externref_table_dealloc function
+#
+# The Makefile `wasm` recipe replaces this entry via
+# CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS to add --remap-path-prefix,
+# and re-adds +reference-types there since the env var replaces rather
+# than merges.
 [target.wasm32-unknown-unknown]
 rustflags = ["-C", "target-feature=+reference-types"]

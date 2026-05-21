@@ -92,23 +92,35 @@ ffi-release:
 # Build the wasm package for browser consumers.
 #   make wasm  → $(WASM_DIR)/pkg/  (ESM with `initSync` / `init()`)
 #
-# `wasm-pack` itself drives `cargo build --release --target wasm32-unknown-unknown`,
-# so the workspace release profile applies. `--target web` emits glue that
-# is directly callable from a browser `<script type="module">` or from
-# any runtime that supports raw `WebAssembly.instantiate` (no bundler
-# required).
+# `wasm-pack` drives `cargo build --target wasm32-unknown-unknown` under
+# the `release-wasm` profile (see workspace Cargo.toml). `--target web`
+# emits glue directly callable from a browser `<script type="module">` or
+# from any runtime supporting raw `WebAssembly.instantiate`.
+#
+# `WASM_BUILD_ENV` makes the `.wasm` byte-reproducible by remapping the
+# three absolute paths that leak into the binary via `file!()` and panic
+# strings: workspace dir, CARGO_HOME (crates.io dependency sources), and
+# the rustc sysroot (rust-src component). The env var replaces
+# `.cargo/config.toml`'s wasm32 rustflags, so `+reference-types` is
+# re-applied here.
 #
 # Post-build, `pkg/package.json` is rewritten to scope the npm name so
 # the on-disk identity matches the published package name. `jq` is a
 # standard tool on CI images and developer environments.
+WASM_BUILD_ENV = CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS=" \
+	-C target-feature=+reference-types \
+	--remap-path-prefix $(CURDIR)=/build/src \
+	--remap-path-prefix $${CARGO_HOME:-$$HOME/.cargo}=/build/cargo \
+	--remap-path-prefix $$(rustc --print sysroot)=/build/rust"
+
 wasm:
-	cd $(WASM_DIR) && $(WASM_PACK) build --target web --release
+	cd $(WASM_DIR) && $(WASM_BUILD_ENV) $(WASM_PACK) build --target web --profile release-wasm
 	@jq '.name = "@brave-intl/poprf-ristretto-wasm"' \
 		$(WASM_DIR)/pkg/package.json > $(WASM_DIR)/pkg/package.json.tmp \
 		&& mv $(WASM_DIR)/pkg/package.json.tmp $(WASM_DIR)/pkg/package.json
 
 wasm-nodejs:
-	cd $(WASM_DIR) && $(WASM_PACK) build --target nodejs --release --out-dir pkg-node
+	cd $(WASM_DIR) && $(WASM_BUILD_ENV) $(WASM_PACK) build --target nodejs --profile release-wasm --out-dir pkg-node
 
 # Round-trip smoke test across the JS↔Rust boundary, run under Node.
 # Catches regressions in the `js_sys::Array` / `Uint8Array` / `JsValue`
