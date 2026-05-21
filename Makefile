@@ -12,13 +12,17 @@
 #   make ffi-release      build the FFI cdylib (libpoprf_ristretto_ffi.so).
 #   make wasm             build the wasm package (target=web, release).
 #   make wasm-nodejs      build the wasm package for Node.js consumers.
+#   make wasm-tarball     run `npm pack` on pkg/ for the publishable .tgz.
+#   make wasm-docker      run wasm builds inside the pinned container.
+#                         Set WASM_DOCKER_TARGETS to override the inner
+#                         make targets (default: wasm).
 #
 # Publish:
 #   make publish-dry-run  cargo publish --dry-run for all three crates
 #                         (verifies packaging, tarball contents, deps).
 #
 # Housekeeping:
-#   make clean            `cargo clean` plus wipe wasm-pack pkg/ and pkg-node/.
+#   make clean            `cargo clean` plus wipe pkg/, pkg-node/, target-docker/.
 #
 # Real publishes (crates.io and npm) are intentionally not exposed as
 # Makefile targets. The commands are:
@@ -29,10 +33,9 @@
 #   cargo publish -p poprf-ristretto-ffi
 #   cargo publish -p poprf-ristretto-wasm
 #
-#   # npm: `make wasm` already scopes pkg/package.json to
-#   # @brave-intl/poprf-ristretto-wasm, so publishing is one step:
-#   make wasm
-#   (cd poprf-ristretto-wasm/pkg && npm publish --access public)
+#   # npm: build the .tgz in the pinned container, then publish:
+#   make wasm-docker WASM_DOCKER_TARGETS=wasm-tarball
+#   (cd poprf-ristretto-wasm/pkg && npm publish --access public *.tgz)
 #
 # `cargo`, `cbindgen`, and `wasm-pack` are invoked through the
 # env-overridable variables below so CI can pin tool versions.
@@ -46,10 +49,12 @@ CBINDGEN  ?= cbindgen
 CARGO     ?= cargo
 WASM_PACK ?= wasm-pack
 WASM_PACK_VERSION ?= 0.15.0
+DOCKER    ?= docker
+DOCKER_IMAGE_TAG ?= poprf-ristretto-build:local
 
 .PHONY: all headers check-headers test clippy fmt check-fmt \
-        ffi-release wasm wasm-nodejs wasm-test publish-dry-run clean \
-        wasm-pack-install
+        ffi-release wasm wasm-nodejs wasm-test wasm-tarball \
+        publish-dry-run clean wasm-pack-install wasm-docker
 
 all: headers test clippy
 
@@ -106,9 +111,6 @@ ffi-release:
 # `.cargo/config.toml`'s wasm32 rustflags, so `+reference-types` is
 # re-applied here.
 #
-# Post-build, `pkg/package.json` is rewritten to scope the npm name so
-# the on-disk identity matches the published package name. `jq` is a
-# standard tool on CI images and developer environments.
 # PATH prepend ensures a wasm-pack just installed by `wasm-pack-install`
 # is found by the recipe shell.
 WASM_BUILD_ENV = PATH="$${CARGO_HOME:-$$HOME/.cargo}/bin:$$PATH" \
@@ -124,12 +126,10 @@ wasm-pack-install:
 		test -x "$${CARGO_HOME:-$$HOME/.cargo}/bin/$(WASM_PACK)" || \
 		$(CARGO) install $(WASM_PACK) --version $(WASM_PACK_VERSION) --locked
 
-# Clean pkg/ before wasm-pack runs: it generates package.json's `files` array
-# by reading pkg/ for LICENSE* entries before copying them in, so leftover
-# files from a previous build leak into the manifest non-deterministically.
-# wasm-pack writes the LICENSE files but never lists them in `files` (it scans
-# pkg/ for them before copying them in), so we append them in a fixed order
-# via jq to keep the manifest filesystem-independent.
+# wasm-pack 0.15.0 generates package.json's `files` array from
+# `read_dir(pkg/)` before copying LICENSE files in. Clean pkg/ first to
+# avoid leftovers leaking in, then append the LICENSEs via jq in a fixed
+# order so the manifest is filesystem-independent.
 wasm: wasm-pack-install
 	rm -rf $(WASM_DIR)/pkg
 	cd $(WASM_DIR) && $(WASM_BUILD_ENV) $(WASM_PACK) build --target web --profile release-wasm --scope brave-intl
@@ -140,6 +140,23 @@ wasm: wasm-pack-install
 wasm-nodejs: wasm-pack-install
 	rm -rf $(WASM_DIR)/pkg-node
 	cd $(WASM_DIR) && $(WASM_BUILD_ENV) $(WASM_PACK) build --target nodejs --profile release-wasm --out-dir pkg-node
+
+# `npm pack` the built pkg/. Pair with `wasm-docker` for a reproducible .tgz.
+wasm-tarball: wasm
+	cd $(WASM_DIR)/pkg && npm pack
+
+# Run targets inside the pinned container (see Dockerfile).
+WASM_DOCKER_TARGETS ?= wasm
+
+wasm-docker:
+	$(DOCKER) build -t $(DOCKER_IMAGE_TAG) .
+	$(DOCKER) run --rm \
+		--user $$(id -u):$$(id -g) \
+		-v $(CURDIR):/work \
+		-e HOME=/tmp \
+		-e CARGO_TARGET_DIR=/work/target-docker \
+		$(DOCKER_IMAGE_TAG) \
+		make $(WASM_DOCKER_TARGETS)
 
 # Round-trip smoke test across the JS↔Rust boundary, run under Node.
 # Catches regressions in the `js_sys::Array` / `Uint8Array` / `JsValue`
@@ -173,4 +190,4 @@ publish-dry-run:
 
 clean:
 	$(CARGO) clean
-	rm -rf $(WASM_DIR)/pkg $(WASM_DIR)/pkg-node
+	rm -rf $(WASM_DIR)/pkg $(WASM_DIR)/pkg-node target-docker

@@ -1,4 +1,5 @@
 /target/
+/target-docker/
 
 # wasm-pack build artifacts (`make wasm` / `make wasm-nodejs`). Regenerate
 # locally; do not commit.

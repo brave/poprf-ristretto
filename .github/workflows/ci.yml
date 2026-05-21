@@ -92,33 +92,13 @@ jobs:
           key: ${{ matrix.toolchain }}
       - run: make test
 
-  # End-to-end wasm build. Verifies wasm-pack, the wasm32-unknown-unknown
-  # target, the `+reference-types` rustflag in .cargo/config.toml, and the
-  # wasm-bindgen CLI version matches the crate version pinned in Cargo.lock.
-  # If any of those decouple, this catches it before npm publish.
-  #
-  # rustc and wasm-pack pinned to exact versions: the published `.wasm`
-  # must be byte-reproducible from the source tag. rustc pin matches
-  # rust-toolchain.toml.
+  # End-to-end wasm build via the pinned container (see Dockerfile).
   wasm:
     name: wasm build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master @ 2026-04
-        with:
-          toolchain: "1.94.0"
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
-      - uses: taiki-e/install-action@ff581034fb69296c525e51afd68cb9823bfbe4ed # v2.65.8
-        with:
-          tool: wasm-pack@0.15.0
-      - run: make wasm
-      - run: make wasm-nodejs
-      # End-to-end round-trip test through the JS↔Rust boundary,
-      # under Node. Catches glue-layer regressions that the native
-      # `cargo test` suite cannot.
-      - run: make wasm-test
+      - run: make wasm-docker WASM_DOCKER_TARGETS="wasm-tarball wasm-nodejs wasm-test"
 
   # Catches packaging regressions before any tag/publish: missing tracked
   # files (e.g. .gitignore over-restriction excluding a fixture), missing
