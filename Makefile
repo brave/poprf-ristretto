@@ -36,6 +36,7 @@
 #   # npm: build the .tgz in the pinned container, then publish:
 #   make wasm-docker WASM_DOCKER_TARGETS=wasm-tarball
 #   (cd poprf-ristretto-wasm/pkg && npm publish --access public *.tgz)
+#   npm package: @brave/poprf-ristretto-wasm
 #
 # `cargo`, `cbindgen`, and `wasm-pack` are invoked through the
 # env-overridable variables below so CI can pin tool versions.
@@ -132,7 +133,7 @@ wasm-pack-install:
 # order so the manifest is filesystem-independent.
 wasm: wasm-pack-install
 	rm -rf $(WASM_DIR)/pkg
-	cd $(WASM_DIR) && $(WASM_BUILD_ENV) $(WASM_PACK) build --target web --profile release-wasm --scope brave-intl
+	cd $(WASM_DIR) && $(WASM_BUILD_ENV) $(WASM_PACK) build --target web --profile release-wasm --scope brave
 	@jq '.files += ["LICENSE-APACHE", "LICENSE-MIT"]' \
 		$(WASM_DIR)/pkg/package.json > $(WASM_DIR)/pkg/package.json.tmp \
 		&& mv $(WASM_DIR)/pkg/package.json.tmp $(WASM_DIR)/pkg/package.json
