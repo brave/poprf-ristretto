@@ -24,7 +24,7 @@ poprf-ristretto = { path = "../poprf-ristretto", version = "0.1.0", default-feat
 # `getrandom`'s `js` feature wires `OsRng` to `crypto.getRandomValues` on
 # wasm32-unknown-unknown; without it `rand_core::OsRng` panics at runtime.
 getrandom = { version = "0.2", default-features = false, features = ["js"] }
-rand_core = { version = "0.6", default-features = false, features = ["std"] }
+rand_core = { version = "0.10", default-features = false, features = ["std"] }
 base64 = { version = "0.22", default-features = false, features = ["alloc"] }
 wasm-bindgen = { version = "0.2", default-features = false, features = ["std"] }
 js-sys = { version = "0.3", default-features = false }

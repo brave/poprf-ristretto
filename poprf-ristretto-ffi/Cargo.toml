@@ -25,7 +25,7 @@ crate-type = ["cdylib", "rlib"]
 # `cargo publish --dry-run`.
 poprf-ristretto = { path = "../poprf-ristretto", version = "0.1.0", default-features = false, features = ["std", "fast-dleq"] }
 base64 = { version = "0.22", default-features = false, features = ["alloc"] }
-rand_core = { version = "0.6", default-features = false, features = ["std", "getrandom"] }
+rand_core = { version = "0.10", default-features = false, features = ["std", "getrandom"] }
 
 [dev-dependencies]
 poprf-ristretto = { path = "../poprf-ristretto", version = "0.1.0", features = ["std"] }
