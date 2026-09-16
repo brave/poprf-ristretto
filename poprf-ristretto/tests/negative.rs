@@ -7,8 +7,8 @@
 use rand_core::OsRng;
 
 use poprf_ristretto::{
-    BlindedElement, Error, EvaluatedElement, PoprfClient, PoprfServer, Proof, PublicKey, SecretKey,
-    derive_key_pair,
+    BlindedElement, Error, EvaluatedElement, PoprfClient, PoprfInputTable, PoprfServer, Proof,
+    PublicKey, SecretKey, derive_key_pair,
 };
 
 // ── §2.1 DeserializeElement / DeserializeScalar ──────────────────────────────
@@ -477,6 +477,26 @@ fn rejects_oversized_input_and_info() {
         "evaluate: oversized info not rejected"
     );
 
+    // The §5.1 input cap moved to table build; pin it there.
+    assert_eq!(
+        PoprfInputTable::new(&too_long).unwrap_err(),
+        Error::InputTooLong,
+        "PoprfInputTable::new: oversized input not rejected"
+    );
+    // evaluate_tables: oversized info (input cap enforced at table build).
+    let ok_table = PoprfInputTable::new(b"x").unwrap();
+    assert_eq!(
+        server.evaluate_tables(&[&ok_table], &too_long).unwrap_err(),
+        Error::InputTooLong,
+        "evaluate_tables: oversized info not rejected"
+    );
+    // evaluate_tables: empty batch, same contract as blind_evaluate_batch.
+    assert_eq!(
+        server.evaluate_tables(&[] as &[&_], b"info").unwrap_err(),
+        Error::LengthMismatch,
+        "evaluate_tables: empty batch not rejected"
+    );
+
     // DeriveKeyPair: oversized info.
     let seed = [0u8; 32];
     assert_eq!(
@@ -552,4 +572,12 @@ fn accepts_maximum_input_and_info_lengths() {
         .unwrap();
     let direct = server.evaluate(&max_ok, &max_ok).unwrap();
     assert_eq!(out, direct, "max-length input/info diverges");
+
+    // Same boundary via the pre-hashed path.
+    let table = PoprfInputTable::new(&max_ok).unwrap();
+    assert_eq!(
+        server.evaluate_tables(&[&table], &max_ok).unwrap(),
+        vec![direct],
+        "max-length input/info diverges via evaluate_tables"
+    );
 }

@@ -19,6 +19,7 @@ typedef struct BlindedElement BlindedElement;
 typedef struct EvaluatedElement EvaluatedElement;
 typedef struct Proof Proof;
 typedef struct PoprfOutput PoprfOutput;
+typedef struct PoprfInputTable PoprfInputTable;
 
 
 #ifdef __cplusplus
@@ -280,6 +281,66 @@ PoprfOutput *poprf_evaluate(const SecretKey *sk,
                             uintptr_t input_len,
                             const uint8_t *info_ptr,
                             uintptr_t info_len);
+
+/**
+ * Pre-hash a POPRF input for repeated offline evaluation under many
+ * different `info` values, amortising `hash_to_group` and the fixed-base
+ * setup across later [`poprf_evaluate_tables`] calls (see
+ * `PoprfInputTable` in `poprf-ristretto`).
+ *
+ * On success, returns an owned `PoprfInputTable *` that must be freed
+ * via [`poprf_input_table_destroy`]. Returns NULL on error; the cause
+ * is available via [`poprf_last_error_message`].
+ *
+ * `input` MUST be smaller than `2^16 - 1` bytes per RFC 9497 §5.1.
+ *
+ * # Safety
+ *
+ * - `input_ptr` must be either NULL with `input_len == 0`, or point to
+ *   `input_len` initialised bytes.
+ */
+PoprfInputTable *poprf_input_table_new(const uint8_t *input_ptr, uintptr_t input_len);
+
+/**
+ * Free a [`PoprfInputTable`] returned by [`poprf_input_table_new`].
+ *
+ * # Safety
+ *
+ * `t` must be either NULL or a pointer previously returned by this
+ * library and not yet destroyed. Double-free is undefined behaviour.
+ */
+void poprf_input_table_destroy(PoprfInputTable *t);
+
+/**
+ * Batched offline evaluation over pre-hashed inputs (RFC 9497 §3.3.3
+ * `Evaluate`), sharing one `t` derivation and field inversion per call.
+ *
+ * Each output is byte-identical to `poprf_evaluate(sk, T_i.input, info)`.
+ *
+ * On success writes `n` owned `PoprfOutput *` values to `out_outputs`
+ * (caller destroys each via [`poprf_output_destroy`]) and returns 0.
+ * On failure — including `n == 0` — returns non-zero, writes no output
+ * pointers, and the cause is in [`poprf_last_error_message`].
+ *
+ * # Safety
+ *
+ * - `sk` must be a valid non-NULL pointer to a `SecretKey` returned by
+ *   this library.
+ * - `tables_arr` must be a valid non-NULL pointer to `n` consecutive
+ *   `*const PoprfInputTable` pointers, each valid and not yet destroyed.
+ * - `info_ptr` must be either NULL with `info_len == 0`, or point to
+ *   `info_len` initialised bytes.
+ * - `out_outputs` must be a valid non-NULL pointer to `n` writable
+ *   `*mut PoprfOutput` slots, suitably aligned.
+ * - `n` must accurately describe the lengths of `tables_arr` and
+ *   `out_outputs`.
+ */
+int poprf_evaluate_tables(const SecretKey *sk,
+                          const PoprfInputTable *const *tables_arr,
+                          uintptr_t n,
+                          const uint8_t *info_ptr,
+                          uintptr_t info_len,
+                          PoprfOutput **out_outputs);
 
 /**
  * Encode a [`PoprfOutput`] as base64 of its 64-byte value.

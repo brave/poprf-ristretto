@@ -9,7 +9,7 @@
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rand_core::OsRng;
 
-use poprf_ristretto::{BlindedElement, PoprfBlindState, PoprfClient, PoprfServer};
+use poprf_ristretto::{BlindedElement, PoprfBlindState, PoprfClient, PoprfInputTable, PoprfServer};
 
 const INPUT: &[u8] = b"poprf-bench-input---32-bytes----";
 const INFO: &[u8] = b"benchmark-info";
@@ -68,6 +68,9 @@ fn bench_poprf(c: &mut Criterion) {
         b.iter(|| server.evaluate(INPUT, INFO).unwrap());
     });
 
+    // Untimed: callers reuse tables, so the build is not a per-call cost.
+    let table = PoprfInputTable::new(INPUT).unwrap();
+
     for &n in BATCH_SIZES {
         let sample_size = match n {
             0..=8 => 100,
@@ -76,6 +79,11 @@ fn bench_poprf(c: &mut Criterion) {
         };
         g.throughput(Throughput::Elements(n as u64));
         g.sample_size(sample_size);
+
+        g.bench_with_input(BenchmarkId::new("evaluate_tables", n), &n, |b, &n| {
+            let tables = vec![&table; n];
+            b.iter(|| server.evaluate_tables(&tables, INFO).unwrap());
+        });
 
         g.bench_with_input(BenchmarkId::new("blind_evaluate_batch", n), &n, |b, &n| {
             b.iter_batched(
