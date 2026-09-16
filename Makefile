@@ -81,10 +81,8 @@ check-headers:
 test:
 	$(CARGO) test --workspace --all-features
 
-# `test` is `--all-features`, which pins `precomputed-tables` on and
-# compiles out `group::FixedBase`'s bare-point fallback entirely. That
-# path needs its own run: a fallback that ignored its base point passed
-# the full all-features suite.
+# `--all-features` compiles out `group::FixedBase`'s bare-point fallback,
+# so that path needs its own run — a broken one once passed `make test`.
 test-no-default:
 	$(CARGO) test -p poprf-ristretto --no-default-features --features std,fast-dleq
 

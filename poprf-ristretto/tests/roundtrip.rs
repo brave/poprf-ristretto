@@ -83,19 +83,13 @@ fn poprf_evaluate_tables_matches_evaluate() {
             .map(|i| server.evaluate(i, info).unwrap())
             .collect();
         let got = server.evaluate_tables(&refs, info).unwrap();
-        let got_direct = server.evaluate_tables(&tables, info).unwrap();
-        assert_eq!(
-            got, expected,
-            "evaluate_tables != evaluate for info={info:?}"
-        );
-        assert_eq!(
-            got_direct, expected,
-            "evaluate_tables direct slice != evaluate for info={info:?}"
-        );
+        assert_eq!(got, expected, "evaluate_tables != evaluate for {info:?}");
+        // Pins the owned-slice side of the `Borrow` bound.
+        assert_eq!(server.evaluate_tables(&tables, info).unwrap(), expected);
     }
 
-    // Repetition and reordering must not change any output.
-    let shuffled: Vec<&PoprfInputTable> = vec![&refs[3], &refs[0], &refs[0], &refs[2]];
+    // Each slot must follow its own table, under repeats and reordering.
+    let shuffled = vec![refs[3], refs[0], refs[0], refs[2]];
     let got = server.evaluate_tables(&shuffled, b"batch-info").unwrap();
     let expect0 = server.evaluate(b"alpha", b"batch-info").unwrap();
     let expect2 = server.evaluate(b"gamma", b"batch-info").unwrap();

@@ -29,11 +29,10 @@ serde = ["alloc", "dep:serde", "dep:serde_bytes"]
 # and RFC 9497 Appendix A test vectors are unchanged.
 fast-dleq = []
 
-# Windowed fixed-base multiplication tables from curve25519-dalek, used
-# by `PoprfInputTable`: ~30 KB per live table instead of a ~160-byte
-# point, in exchange for substantially faster `evaluate_tables`. The
-# base-point paths multiply by the base *point*, not a table, so they
-# are unaffected either way. Disable for memory-constrained builds.
+# Windowed fixed-base tables (curve25519-dalek), used only by
+# `PoprfInputTable`: ~30 KB per live table instead of a ~160-byte point,
+# for a ~2x faster `evaluate_tables`. Base-point paths multiply by the
+# bare point, so they are unaffected. Disable for constrained builds.
 precomputed-tables = ["curve25519-dalek/precomputed-tables"]
 
 [dependencies]

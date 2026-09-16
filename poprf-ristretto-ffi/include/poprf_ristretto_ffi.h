@@ -284,11 +284,9 @@ PoprfOutput *poprf_evaluate(const SecretKey *sk,
 
 /**
  * Pre-hash a POPRF input for repeated offline evaluation under many
- * different `info` values (see `PoprfInputTable` in `poprf-ristretto`).
- *
- * Building the table once amortises `hash_to_group` and the
- * fixed-base multiplication setup across every later
- * [`poprf_evaluate_tables`] call that includes it.
+ * different `info` values, amortising `hash_to_group` and the fixed-base
+ * setup across later [`poprf_evaluate_tables`] calls (see
+ * `PoprfInputTable` in `poprf-ristretto`).
  *
  * On success, returns an owned `PoprfInputTable *` that must be freed
  * via [`poprf_input_table_destroy`]. Returns NULL on error; the cause

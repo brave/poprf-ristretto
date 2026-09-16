@@ -477,7 +477,7 @@ fn rejects_oversized_input_and_info() {
         "evaluate: oversized info not rejected"
     );
 
-    // PoprfInputTable::new rejects oversized input before any curve work.
+    // The §5.1 input cap moved to table build; pin it there.
     assert_eq!(
         PoprfInputTable::new(&too_long).unwrap_err(),
         Error::InputTooLong,
@@ -492,9 +492,7 @@ fn rejects_oversized_input_and_info() {
     );
     // evaluate_tables: empty batch, same contract as blind_evaluate_batch.
     assert_eq!(
-        server
-            .evaluate_tables(&[] as &[&PoprfInputTable], b"info")
-            .unwrap_err(),
+        server.evaluate_tables(&[] as &[&_], b"info").unwrap_err(),
         Error::LengthMismatch,
         "evaluate_tables: empty batch not rejected"
     );
@@ -575,8 +573,7 @@ fn accepts_maximum_input_and_info_lengths() {
     let direct = server.evaluate(&max_ok, &max_ok).unwrap();
     assert_eq!(out, direct, "max-length input/info diverges");
 
-    // Same boundary via the pre-hashed path: the input cap moved to
-    // table-build time, so it needs its own check at exactly the cap.
+    // Same boundary via the pre-hashed path.
     let table = PoprfInputTable::new(&max_ok).unwrap();
     assert_eq!(
         server.evaluate_tables(&[&table], &max_ok).unwrap(),

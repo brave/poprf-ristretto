@@ -47,26 +47,20 @@ pub(crate) fn scalar_mul_gen(scalar: &Scalar) -> RistrettoPoint {
 }
 
 /// A caller-supplied base point prepared for repeated multiplication by
-/// unrelated scalars (see `PoprfInputTable`). Under `precomputed-tables`
-/// a ~30 KB windowed table of multiples; otherwise the bare point. Both
-/// are constant-time in the scalar.
+/// unrelated scalars (see `PoprfInputTable`): a ~30 KB windowed table
+/// under `precomputed-tables`, else the bare point. Both constant-time.
 #[cfg(feature = "precomputed-tables")]
 pub(crate) type FixedBase = RistrettoBasepointTable;
 #[cfg(not(feature = "precomputed-tables"))]
 pub(crate) type FixedBase = RistrettoPoint;
 
 /// Prepare `p` for repeated `scalar * p`.
-#[cfg(feature = "precomputed-tables")]
 #[inline]
 pub(crate) fn fixed_base(p: &RistrettoPoint) -> FixedBase {
-    RistrettoBasepointTable::create(p)
-}
-
-/// Prepare `p` for repeated `scalar * p`.
-#[cfg(not(feature = "precomputed-tables"))]
-#[inline]
-pub(crate) fn fixed_base(p: &RistrettoPoint) -> FixedBase {
-    *p
+    #[cfg(feature = "precomputed-tables")]
+    return FixedBase::create(p);
+    #[cfg(not(feature = "precomputed-tables"))]
+    return *p;
 }
 
 /// `scalar * base` where `base` came from [`fixed_base`].

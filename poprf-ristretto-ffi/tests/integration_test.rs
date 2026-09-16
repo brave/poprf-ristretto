@@ -199,7 +199,6 @@ fn evaluate_tables_via_c_abi() {
             assert_eq!(rc, 0, "evaluate_tables rc={rc}");
 
             for (i, o) in outs.iter().enumerate() {
-                // Each FFI output must equal the per-call evaluate output.
                 let single = poprf_evaluate(
                     sk,
                     inputs[i].as_ptr(),
@@ -224,7 +223,6 @@ fn evaluate_tables_via_c_abi() {
         assert!(!s.is_null());
         let sentinels = [s, s];
 
-        // Empty batch.
         let mut outs = sentinels;
         let rc = poprf_evaluate_tables(sk, tables.as_ptr(), 0, b"x".as_ptr(), 1, outs.as_mut_ptr());
         assert_ne!(rc, 0, "n=0 must fail");

@@ -68,7 +68,7 @@ fn bench_poprf(c: &mut Criterion) {
         b.iter(|| server.evaluate(INPUT, INFO).unwrap());
     });
 
-    // Table build is amortised by construction, so it stays untimed.
+    // Untimed: callers reuse tables, so the build is not a per-call cost.
     let table = PoprfInputTable::new(INPUT).unwrap();
 
     for &n in BATCH_SIZES {
