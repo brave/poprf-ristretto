@@ -73,7 +73,8 @@
 //!   [`PoprfBlindState`], [`PoprfOutput`]) implement `ZeroizeOnDrop` and
 //!   are wiped automatically when they go out of scope. [`Proof`] is wire
 //!   data with no secret content (see its type-level docs) and is not
-//!   zeroized.
+//!   zeroized; nor is [`PoprfInputTable`], which only holds bytes the
+//!   caller already owns.
 //! * **`info` parameter.** Both client and server must agree on `info`
 //!   out-of-band. A mismatch yields [`Error::Verify`] on the client (the
 //!   reconstructed `tweakedKey` will not match the server's), not silent

@@ -317,15 +317,12 @@ void poprf_input_table_destroy(PoprfInputTable *t);
  * Batched offline evaluation over pre-hashed inputs (RFC 9497 §3.3.3
  * `Evaluate`), sharing one `t` derivation and field inversion per call.
  *
- * For each table `T_i`, the output is byte-identical to
- * `poprf_evaluate(sk, T_i.input, info)`; the batch exists so repeated
- * inputs under the same `info` skip the per-input `hash_to_group`,
- * hash-to-scalar, and inversion.
+ * Each output is byte-identical to `poprf_evaluate(sk, T_i.input, info)`.
  *
  * On success writes `n` owned `PoprfOutput *` values to `out_outputs`
  * (caller destroys each via [`poprf_output_destroy`]) and returns 0.
- * On failure returns non-zero, writes no output pointers, and the
- * cause is available via [`poprf_last_error_message`].
+ * On failure — including `n == 0` — returns non-zero, writes no output
+ * pointers, and the cause is in [`poprf_last_error_message`].
  *
  * # Safety
  *
@@ -338,7 +335,7 @@ void poprf_input_table_destroy(PoprfInputTable *t);
  * - `out_outputs` must be a valid non-NULL pointer to `n` writable
  *   `*mut PoprfOutput` slots, suitably aligned.
  * - `n` must accurately describe the lengths of `tables_arr` and
- *   `out_outputs`, and be at least 1.
+ *   `out_outputs`.
  */
 int poprf_evaluate_tables(const SecretKey *sk,
                           const PoprfInputTable *const *tables_arr,

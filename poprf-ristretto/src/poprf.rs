@@ -1,6 +1,7 @@
 //! POPRF protocol (see: RFC 9497 §3.3.3).
 //! <https://www.rfc-editor.org/rfc/rfc9497.txt>
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt;
 
@@ -154,37 +155,37 @@ impl fmt::Debug for PoprfOutput {
 /// input under different `info` values (see
 /// [`PoprfServer::evaluate_tables`]).
 ///
-/// Not zeroized: `input` is caller-visible and the group point is its
-/// public image. Under `precomputed-tables` a table is ~30 KB, so build
-/// one per *recurring* input, not per call.
+/// Holds `input` in the clear and is not zeroized — the caller already
+/// owns those bytes, and the group point is their public image. Under
+/// `precomputed-tables` the build costs ~40 evaluations, so build one
+/// per *recurring* input, not per call.
 pub struct PoprfInputTable {
     pub(crate) input: Vec<u8>,
-    pub(crate) base: group::FixedBase,
+    // Boxed: inline, a 30 KB table would cross every `new` return slot,
+    // and the FFI does not control its caller's stack.
+    pub(crate) base: Box<group::FixedBase>,
 }
 
 impl PoprfInputTable {
-    /// Hash `input` once. Fails under the same conditions as
-    /// [`PoprfServer::evaluate`]: the RFC 9497 §5.1 length cap, or an
-    /// input that maps to the group identity — after which the input is
-    /// no longer a failure source, but `evaluate_tables` can still
-    /// reject the `info` it is called with.
+    /// Hash `input` once, moving [`PoprfServer::evaluate`]'s input checks
+    /// to build time.
     pub fn new(input: &[u8]) -> Result<Self, Error> {
         check_lp_len(input)?;
         let p = group::hash_to_group(&[input], HASH_TO_GROUP_DST);
+        // Same rejection as `evaluate`: the identity carries no input.
         if bool::from(group::is_identity(&p)) {
             return Err(Error::InvalidInput);
         }
         Ok(Self {
             input: input.to_vec(),
-            base: group::fixed_base(&p),
+            base: Box::new(group::fixed_base(&p)),
         })
     }
 }
 
 impl fmt::Debug for PoprfInputTable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Print the length, not the input: it can be ~64 KiB (RFC 9497
-        // §5.1) and is the issuance-to-redemption linkage identifier.
+        // Length only: `input` can be ~64 KiB and is redemption-linkable.
         write!(f, "PoprfInputTable({} bytes)", self.input.len())
     }
 }
@@ -623,9 +624,7 @@ impl PoprfServer {
     /// Batched `Evaluate` over pre-hashed inputs (RFC 9497 §3.3.3): each
     /// output is byte-identical to [`PoprfServer::evaluate`] for the same
     /// input, sharing one `t = skS + m` derivation and field inversion
-    /// across the batch. The table build pays back only on reuse.
-    ///
-    /// Constant-time in `skS` and `t`; the inputs and `info` are public.
+    /// across the batch. Constant-time in `skS` and `t`.
     pub fn evaluate_tables<T: core::borrow::Borrow<PoprfInputTable>>(
         &self,
         tables: &[T],
@@ -649,8 +648,7 @@ impl PoprfServer {
     /// Compute `t = skS + m` where `m = HashToScalar(framedInfo)`.
     ///
     /// Enforces the RFC 9497 §5.1 length cap on `info`; every server path
-    /// that consumes `info` (`blind_evaluate*`, `evaluate`) routes through
-    /// this function, so the check lives here once.
+    /// that consumes `info` routes through here, so the check lives once.
     fn compute_t(&self, info: &[u8]) -> Result<Scalar, Error> {
         check_lp_len(info)?;
         let framed = framed_info(info);

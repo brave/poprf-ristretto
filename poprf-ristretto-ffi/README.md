@@ -44,7 +44,7 @@ and `poprf_last_error_message` are freed with `poprf_c_char_destroy`.
 | `BlindedElement *`   | `poprf_blinded_element_decode_base64` |
 | `EvaluatedElement *` | `poprf_blind_evaluate_batch` (one per token) |
 | `Proof *`            | `poprf_blind_evaluate_batch` |
-| `PoprfOutput *`      | `poprf_evaluate`, `poprf_evaluate_tables` |
+| `PoprfOutput *`      | `poprf_evaluate`, `poprf_evaluate_tables` (one per table) |
 | `PoprfInputTable *`  | `poprf_input_table_new` |
 
 No FFI function other than the destructors takes ownership of or mutates
@@ -68,9 +68,9 @@ if (err != NULL) {
 
 ## Thread safety
 
-- Operations on a handle (encoding, deriving the public key,
-  blind-evaluate, evaluate, evaluate-tables) are `Send + Sync`, so one
-  `PoprfInputTable` can be shared across threads.
+- Every handle type is `Send + Sync`, so any handle — including one
+  `PoprfInputTable` shared across a `poprf_evaluate_tables` fan-out —
+  may be used concurrently from any number of threads.
 - Constructors that need randomness use a CSPRNG seeded from the OS
   (`OsRng`); there is no global mutable state.
 - `LAST_ERROR` is thread-local — errors set on one thread are not visible
@@ -85,12 +85,12 @@ cargo build --release -p poprf-ristretto-ffi
 ```
 
 The binding crate depends on `poprf-ristretto` with `default-features =
-false` plus `["std", "fast-dleq", "precomputed-tables"]`: the
-`PoprfInputTable` handle exists to accelerate repeated fixed-base
-multiplication, which is what `precomputed-tables` provides, at ~30 KB
-of heap per live handle. Drop the feature in
-[`Cargo.toml`](./Cargo.toml) for ~160-byte handles and a ~13 KB smaller
-cdylib, at the cost of slower `poprf_evaluate_tables`.
+false` plus `["std", "fast-dleq", "precomputed-tables"]`. Pre-hashing
+alone already makes `poprf_evaluate_tables` ~1.6x faster than
+`poprf_evaluate`; `precomputed-tables` buys another ~2x, at ~30 KB of
+heap per live `PoprfInputTable` rather than ~160 bytes, plus ~13 KB of
+cdylib. It also makes the table far costlier to build, so drop it in
+[`Cargo.toml`](./Cargo.toml) unless each table is evaluated ~50+ times.
 
 Produces:
 
