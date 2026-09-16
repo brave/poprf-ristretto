@@ -18,12 +18,12 @@ use rand_core::OsRng;
 // Since crate-type = ["cdylib", "rlib"] we can link the rlib in tests.
 use poprf_ristretto_ffi::{
     poprf_blind_evaluate_batch, poprf_blinded_element_decode_base64, poprf_blinded_element_destroy,
-    poprf_c_char_destroy, poprf_evaluate, poprf_evaluated_element_destroy,
-    poprf_evaluated_element_encode_base64, poprf_output_destroy, poprf_output_encode_base64,
-    poprf_output_eq_base64, poprf_proof_destroy, poprf_proof_encode_base64,
-    poprf_public_key_destroy, poprf_public_key_encode_base64, poprf_public_key_from_secret,
-    poprf_secret_key_decode_base64, poprf_secret_key_destroy, poprf_secret_key_encode_base64,
-    poprf_secret_key_from_seed,
+    poprf_c_char_destroy, poprf_evaluate, poprf_evaluate_tables, poprf_evaluated_element_destroy,
+    poprf_evaluated_element_encode_base64, poprf_input_table_destroy, poprf_input_table_new,
+    poprf_output_destroy, poprf_output_encode_base64, poprf_output_eq_base64, poprf_proof_destroy,
+    poprf_proof_encode_base64, poprf_public_key_destroy, poprf_public_key_encode_base64,
+    poprf_public_key_from_secret, poprf_secret_key_decode_base64, poprf_secret_key_destroy,
+    poprf_secret_key_encode_base64, poprf_secret_key_from_seed,
 };
 
 use std::ffi::CStr;
@@ -154,6 +154,99 @@ fn server_side_round_trip_via_c_abi() {
         poprf_evaluated_element_destroy(eval_ptr);
         poprf_blinded_element_destroy(be_ptr);
         poprf_proof_destroy(proof_ptr);
+        poprf_secret_key_destroy(sk);
+    }
+}
+
+// ── batched evaluate over pre-hashed inputs ─────────────────────────────────
+
+/// `poprf_evaluate_tables` must agree with `poprf_evaluate` per input,
+/// across `info` values and with repeated tables in one batch.
+#[test]
+fn evaluate_tables_via_c_abi() {
+    let seed: Vec<u8> = (0u8..32).collect();
+    let seed_info = b"poprf-ffi-integration-test";
+    // Repeat is non-adjacent, so a permuted out-slot cannot pass unnoticed.
+    let inputs: [&[u8]; 3] = [b"tok-0", b"tok-1", b"tok-0"];
+
+    unsafe {
+        let sk = poprf_secret_key_from_seed(
+            seed.as_ptr(),
+            seed.len(),
+            seed_info.as_ptr(),
+            seed_info.len(),
+        );
+        assert!(!sk.is_null());
+
+        let mut tables: Vec<_> = Vec::new();
+        for inp in inputs {
+            let t: *const _ = poprf_input_table_new(inp.as_ptr(), inp.len());
+            assert!(!t.is_null(), "input_table_new failed");
+            tables.push(t);
+        }
+
+        for info in [&b"info-a"[..], &b"info-b"[..]] {
+            let mut outs = [std::ptr::null_mut(); 3];
+            let rc = poprf_evaluate_tables(
+                sk,
+                tables.as_ptr(),
+                3,
+                info.as_ptr(),
+                info.len(),
+                outs.as_mut_ptr(),
+            );
+            assert_eq!(rc, 0, "evaluate_tables rc={rc}");
+
+            for (i, o) in outs.iter().enumerate() {
+                // Each FFI output must equal the per-call evaluate output.
+                let single = poprf_evaluate(
+                    sk,
+                    inputs[i].as_ptr(),
+                    inputs[i].len(),
+                    info.as_ptr(),
+                    info.len(),
+                );
+                assert!(!single.is_null());
+                let got = take_cstring(poprf_output_encode_base64(*o));
+                let expect = take_cstring(poprf_output_encode_base64(single));
+                assert_eq!(got, expect, "batch[{i}] != evaluate under {info:?}");
+                poprf_output_destroy(single);
+            }
+            for o in outs {
+                poprf_output_destroy(o);
+            }
+        }
+
+        // Rejections must not touch the out slots. A real pointer rather
+        // than NULL, so "writes no outputs" is an assertion, not a tautology.
+        let s = poprf_evaluate(sk, b"s".as_ptr(), 1, b"s".as_ptr(), 1);
+        assert!(!s.is_null());
+        let sentinels = [s, s];
+
+        // Empty batch.
+        let mut outs = sentinels;
+        let rc = poprf_evaluate_tables(sk, tables.as_ptr(), 0, b"x".as_ptr(), 1, outs.as_mut_ptr());
+        assert_ne!(rc, 0, "n=0 must fail");
+        assert_eq!(outs, sentinels, "n=0 must not write outputs");
+
+        // Null table at index 1, i.e. after index 0 was already accepted.
+        let mut outs = sentinels;
+        let with_null = [tables[0], std::ptr::null()];
+        let rc = poprf_evaluate_tables(
+            sk,
+            with_null.as_ptr(),
+            2,
+            b"x".as_ptr(),
+            1,
+            outs.as_mut_ptr(),
+        );
+        assert_ne!(rc, 0, "null table must fail");
+        assert_eq!(outs, sentinels, "null table must not write outputs");
+        poprf_output_destroy(s);
+
+        for t in tables {
+            poprf_input_table_destroy(t as *mut _);
+        }
         poprf_secret_key_destroy(sk);
     }
 }

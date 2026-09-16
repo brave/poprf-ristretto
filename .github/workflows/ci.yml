@@ -91,6 +91,7 @@ jobs:
         with:
           key: ${{ matrix.toolchain }}
       - run: make test
+      - run: make test-no-default
 
   # End-to-end wasm build via the pinned container (see Dockerfile).
   wasm:

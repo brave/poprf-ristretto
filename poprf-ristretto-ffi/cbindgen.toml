@@ -41,6 +41,7 @@ typedef struct BlindedElement BlindedElement;
 typedef struct EvaluatedElement EvaluatedElement;
 typedef struct Proof Proof;
 typedef struct PoprfOutput PoprfOutput;
+typedef struct PoprfInputTable PoprfInputTable;
 """
 
 [parse]

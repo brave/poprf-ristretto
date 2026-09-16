@@ -148,6 +148,47 @@ impl fmt::Debug for PoprfOutput {
     }
 }
 
+// ── pre-hashed input for batched offline evaluation ──────────────────────────
+
+/// A pre-hashed POPRF input, for repeated offline evaluation of the same
+/// input under different `info` values (see
+/// [`PoprfServer::evaluate_tables`]).
+///
+/// Not zeroized: `input` is caller-visible and the group point is its
+/// public image. Under `precomputed-tables` a table is ~30 KB, so build
+/// one per *recurring* input, not per call.
+pub struct PoprfInputTable {
+    pub(crate) input: Vec<u8>,
+    pub(crate) base: group::FixedBase,
+}
+
+impl PoprfInputTable {
+    /// Hash `input` once. Fails under the same conditions as
+    /// [`PoprfServer::evaluate`]: the RFC 9497 §5.1 length cap, or an
+    /// input that maps to the group identity — after which the input is
+    /// no longer a failure source, but `evaluate_tables` can still
+    /// reject the `info` it is called with.
+    pub fn new(input: &[u8]) -> Result<Self, Error> {
+        check_lp_len(input)?;
+        let p = group::hash_to_group(&[input], HASH_TO_GROUP_DST);
+        if bool::from(group::is_identity(&p)) {
+            return Err(Error::InvalidInput);
+        }
+        Ok(Self {
+            input: input.to_vec(),
+            base: group::fixed_base(&p),
+        })
+    }
+}
+
+impl fmt::Debug for PoprfInputTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Print the length, not the input: it can be ~64 KiB (RFC 9497
+        // §5.1) and is the issuance-to-redemption linkage identifier.
+        write!(f, "PoprfInputTable({} bytes)", self.input.len())
+    }
+}
+
 // ── client blind state ────────────────────────────────────────────────────────
 
 /// Client-side state kept between [`PoprfClient::blind`] and
@@ -577,6 +618,32 @@ impl PoprfServer {
         let evaluated = group::scalar_mul(&t_inv, &input_element);
         let issued = group::serialize_element_array(&evaluated);
         Ok(finalize_hash(input, info, &issued))
+    }
+
+    /// Batched `Evaluate` over pre-hashed inputs (RFC 9497 §3.3.3): each
+    /// output is byte-identical to [`PoprfServer::evaluate`] for the same
+    /// input, sharing one `t = skS + m` derivation and field inversion
+    /// across the batch. The table build pays back only on reuse.
+    ///
+    /// Constant-time in `skS` and `t`; the inputs and `info` are public.
+    pub fn evaluate_tables<T: core::borrow::Borrow<PoprfInputTable>>(
+        &self,
+        tables: &[T],
+        info: &[u8],
+    ) -> Result<Vec<PoprfOutput>, Error> {
+        if tables.is_empty() {
+            return Err(Error::LengthMismatch);
+        }
+        // One hash-to-scalar + inversion per batch, not per input.
+        let t_inv = group::scalar_invert(&self.compute_t(info)?);
+        Ok(tables
+            .iter()
+            .map(|tb| {
+                let tb = tb.borrow();
+                let e = group::scalar_mul_fixed(&t_inv, &tb.base);
+                finalize_hash(&tb.input, info, &group::serialize_element_array(&e))
+            })
+            .collect())
     }
 
     /// Compute `t = skS + m` where `m = HashToScalar(framedInfo)`.

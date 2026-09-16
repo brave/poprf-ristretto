@@ -35,7 +35,7 @@ Each crate has its own README with usage, build, and consumption instructions.
 
 ## Status
 
-**0.1.0 — pending audit.** All RFC 9497 Appendix A test
+**0.2.0 — pending audit.** All RFC 9497 Appendix A test
 vectors for the `ristretto255-SHA512` POPRF mode pass. The security
 contract (pseudorandomness, obliviousness, verifiability, info-binding)
 and constant-time discipline are documented in the crate-level rustdoc;

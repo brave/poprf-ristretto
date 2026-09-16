@@ -19,7 +19,8 @@ use base64::engine::general_purpose::STANDARD as B64;
 use rand_core::OsRng;
 
 use poprf_ristretto::{
-    BlindedElement, EvaluatedElement, PoprfOutput, PoprfServer, Proof, PublicKey, SecretKey,
+    BlindedElement, EvaluatedElement, PoprfInputTable, PoprfOutput, PoprfServer, Proof, PublicKey,
+    SecretKey,
 };
 
 // ── thread-local last error ──────────────────────────────────────────────────
@@ -579,6 +580,151 @@ pub unsafe extern "C" fn poprf_evaluate(
                 ptr::null_mut()
             }
         }
+    }
+}
+
+// ── Batched Evaluate over pre-hashed inputs ─────────────────────────────────
+
+/// Pre-hash a POPRF input for repeated offline evaluation under many
+/// different `info` values (see `PoprfInputTable` in `poprf-ristretto`).
+///
+/// Building the table once amortises `hash_to_group` and the
+/// fixed-base multiplication setup across every later
+/// [`poprf_evaluate_tables`] call that includes it.
+///
+/// On success, returns an owned `PoprfInputTable *` that must be freed
+/// via [`poprf_input_table_destroy`]. Returns NULL on error; the cause
+/// is available via [`poprf_last_error_message`].
+///
+/// `input` MUST be smaller than `2^16 - 1` bytes per RFC 9497 §5.1.
+///
+/// # Safety
+///
+/// - `input_ptr` must be either NULL with `input_len == 0`, or point to
+///   `input_len` initialised bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn poprf_input_table_new(
+    input_ptr: *const u8,
+    input_len: usize,
+) -> *mut PoprfInputTable {
+    unsafe {
+        clear_error();
+        let input = match bytes_from_raw(input_ptr, input_len) {
+            Some(i) => i,
+            None => {
+                set_error("invalid input pointer");
+                return ptr::null_mut();
+            }
+        };
+        match PoprfInputTable::new(input) {
+            Ok(t) => Box::into_raw(Box::new(t)),
+            Err(e) => {
+                set_error(&format!("PoprfInputTable::new: {e}"));
+                ptr::null_mut()
+            }
+        }
+    }
+}
+
+/// Free a [`PoprfInputTable`] returned by [`poprf_input_table_new`].
+///
+/// # Safety
+///
+/// `t` must be either NULL or a pointer previously returned by this
+/// library and not yet destroyed. Double-free is undefined behaviour.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn poprf_input_table_destroy(t: *mut PoprfInputTable) {
+    unsafe {
+        if !t.is_null() {
+            drop(Box::from_raw(t));
+        }
+    }
+}
+
+/// Batched offline evaluation over pre-hashed inputs (RFC 9497 §3.3.3
+/// `Evaluate`), sharing one `t` derivation and field inversion per call.
+///
+/// For each table `T_i`, the output is byte-identical to
+/// `poprf_evaluate(sk, T_i.input, info)`; the batch exists so repeated
+/// inputs under the same `info` skip the per-input `hash_to_group`,
+/// hash-to-scalar, and inversion.
+///
+/// On success writes `n` owned `PoprfOutput *` values to `out_outputs`
+/// (caller destroys each via [`poprf_output_destroy`]) and returns 0.
+/// On failure returns non-zero, writes no output pointers, and the
+/// cause is available via [`poprf_last_error_message`].
+///
+/// # Safety
+///
+/// - `sk` must be a valid non-NULL pointer to a `SecretKey` returned by
+///   this library.
+/// - `tables_arr` must be a valid non-NULL pointer to `n` consecutive
+///   `*const PoprfInputTable` pointers, each valid and not yet destroyed.
+/// - `info_ptr` must be either NULL with `info_len == 0`, or point to
+///   `info_len` initialised bytes.
+/// - `out_outputs` must be a valid non-NULL pointer to `n` writable
+///   `*mut PoprfOutput` slots, suitably aligned.
+/// - `n` must accurately describe the lengths of `tables_arr` and
+///   `out_outputs`, and be at least 1.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn poprf_evaluate_tables(
+    sk: *const SecretKey,
+    tables_arr: *const *const PoprfInputTable,
+    n: usize,
+    info_ptr: *const u8,
+    info_len: usize,
+    out_outputs: *mut *mut PoprfOutput,
+) -> c_int {
+    unsafe {
+        clear_error();
+        if sk.is_null() || tables_arr.is_null() || out_outputs.is_null() {
+            set_error("null pointer in evaluate_tables");
+            return -1;
+        }
+        if n == 0 {
+            set_error("evaluate_tables requires n >= 1");
+            return -1;
+        }
+        let info = match bytes_from_raw(info_ptr, info_len) {
+            Some(i) => i,
+            None => {
+                set_error("invalid info pointer");
+                return -1;
+            }
+        };
+
+        // Collect refs without cloning the tables (a table is ~30 KB).
+        let ptrs = slice::from_raw_parts(tables_arr, n);
+        let mut tables: Vec<&PoprfInputTable> = Vec::with_capacity(n);
+        for (i, p) in ptrs.iter().enumerate() {
+            if p.is_null() {
+                set_error(&format!("null PoprfInputTable at index {i}"));
+                return -1;
+            }
+            tables.push(&**p);
+        }
+
+        let server = PoprfServer::new((*sk).clone());
+        let outputs = match server.evaluate_tables(&tables, info) {
+            Ok(t) => t,
+            Err(e) => {
+                set_error(&format!("evaluate_tables: {e}"));
+                return -1;
+            }
+        };
+        // Bounds the unchecked `add(i)` loop below, which unlike an indexed
+        // slice would happily write past the caller's array.
+        if outputs.len() != n {
+            set_error("output count mismatch");
+            return -1;
+        }
+
+        // Write through the raw pointer: the out-slots are typically
+        // uninitialised, and a `&mut [_]` over uninit memory is UB.
+        for (i, o) in outputs.into_iter().enumerate() {
+            out_outputs.add(i).write(Box::into_raw(Box::new(o)));
+        }
+        0
     }
 }
 

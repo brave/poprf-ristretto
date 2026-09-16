@@ -53,10 +53,10 @@
 //!
 //! * **Constant-time discipline.** [`PoprfClient::finalize`],
 //!   [`PoprfClient::finalize_batch`], [`PoprfServer::blind_evaluate`],
-//!   [`PoprfServer::blind_evaluate_batch`], and [`PoprfServer::evaluate`]
-//!   are constant-time in every secret scalar: `skS`, the client `blind`,
-//!   the DLEQ proof nonce `r`, and the per-`info` evaluation scalar
-//!   `t = skS + m`. The test-vector siblings
+//!   [`PoprfServer::blind_evaluate_batch`], [`PoprfServer::evaluate`], and
+//!   [`PoprfServer::evaluate_tables`] are constant-time in every secret
+//!   scalar: `skS`, the client `blind`, the DLEQ proof nonce `r`, and the
+//!   per-`info` evaluation scalar `t = skS + m`. The test-vector siblings
 //!   ([`PoprfClient::blind_with_scalar`],
 //!   [`PoprfServer::blind_evaluate_with_proof_scalar`],
 //!   [`PoprfServer::blind_evaluate_batch_with_proof_scalar`]) share the
@@ -89,7 +89,7 @@
 //! | `std`                | yes     | Enables `std::error::Error` impl on [`Error`]. |
 //! | `alloc`              | yes     | Required by all protocol APIs (implied by `std`). |
 //! | `fast-dleq`          | yes     | Vartime Pippenger MSM in DLEQ composite computation. |
-//! | `precomputed-tables` | yes     | Precomputed multiples of the base point (+~30 KB rodata). |
+//! | `precomputed-tables` | yes     | Windowed fixed-base tables: ~30 KB per live [`PoprfInputTable`]. |
 //! | `serde`              | no      | `serde::{Serialize, Deserialize}` for wire types. |
 //!
 //! At least one of `std` or `alloc` is required to build — the batched
@@ -124,7 +124,8 @@ pub use dleq::Proof;
 pub use error::Error;
 pub use key::{PublicKey, SecretKey, derive_key_pair, generate_key_pair};
 pub use poprf::{
-    BlindedElement, EvaluatedElement, PoprfBlindState, PoprfClient, PoprfOutput, PoprfServer,
+    BlindedElement, EvaluatedElement, PoprfBlindState, PoprfClient, PoprfInputTable, PoprfOutput,
+    PoprfServer,
 };
 
 /// Mode identifier for POPRF (RFC 9497 §3.1).

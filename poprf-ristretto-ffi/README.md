@@ -18,8 +18,9 @@ to deserialize what the server sent:
 
 - Keys: derive `SecretKey` from a seed, encode/decode either key as
   base64, derive `PublicKey` from `SecretKey`.
-- Protocol: `poprf_blind_evaluate_batch` (batched DLEQ proof) and
-  `poprf_evaluate` (offline evaluation).
+- Protocol: `poprf_blind_evaluate_batch` (batched DLEQ proof),
+  `poprf_evaluate` (offline evaluation), and `poprf_evaluate_tables`
+  (batched offline evaluation over pre-hashed inputs).
 - Wire types: decode `BlindedElement` from base64; encode
   `EvaluatedElement`, `Proof`, `PoprfOutput` to base64.
 - Output comparison: constant-time `poprf_output_eq_base64`.
@@ -43,7 +44,8 @@ and `poprf_last_error_message` are freed with `poprf_c_char_destroy`.
 | `BlindedElement *`   | `poprf_blinded_element_decode_base64` |
 | `EvaluatedElement *` | `poprf_blind_evaluate_batch` (one per token) |
 | `Proof *`            | `poprf_blind_evaluate_batch` |
-| `PoprfOutput *`      | `poprf_evaluate` |
+| `PoprfOutput *`      | `poprf_evaluate`, `poprf_evaluate_tables` |
+| `PoprfInputTable *`  | `poprf_input_table_new` |
 
 No FFI function other than the destructors takes ownership of or mutates
 its handle arguments. Higher-level bindings should wrap each
@@ -67,7 +69,8 @@ if (err != NULL) {
 ## Thread safety
 
 - Operations on a handle (encoding, deriving the public key,
-  blind-evaluate, evaluate) are `Send + Sync`.
+  blind-evaluate, evaluate, evaluate-tables) are `Send + Sync`, so one
+  `PoprfInputTable` can be shared across threads.
 - Constructors that need randomness use a CSPRNG seeded from the OS
   (`OsRng`); there is no global mutable state.
 - `LAST_ERROR` is thread-local — errors set on one thread are not visible
@@ -82,10 +85,12 @@ cargo build --release -p poprf-ristretto-ffi
 ```
 
 The binding crate depends on `poprf-ristretto` with `default-features =
-false` plus `["std", "fast-dleq"]`; the core crate's
-`precomputed-tables` feature is **not** enabled, keeping the cdylib
-smaller at the cost of slower base-point scalar multiplication. Edit
-[`Cargo.toml`](./Cargo.toml) to add it back if size is not a concern.
+false` plus `["std", "fast-dleq", "precomputed-tables"]`: the
+`PoprfInputTable` handle exists to accelerate repeated fixed-base
+multiplication, which is what `precomputed-tables` provides, at ~30 KB
+of heap per live handle. Drop the feature in
+[`Cargo.toml`](./Cargo.toml) for ~160-byte handles and a ~13 KB smaller
+cdylib, at the cost of slower `poprf_evaluate_tables`.
 
 Produces:
 

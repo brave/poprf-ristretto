@@ -23,9 +23,12 @@ crate-type = ["cdylib", "rlib"]
 # `version` alongside `path` is required for publishing: `path` wins during
 # workspace builds, `version` is used by crates.io consumers and
 # `cargo publish --dry-run`.
-poprf-ristretto = { path = "../poprf-ristretto", version = "0.1.0", default-features = false, features = ["std", "fast-dleq"] }
+# `precomputed-tables` is on for the FFI build: it makes `PoprfInputTable`
+# a windowed table, which is what `poprf_evaluate_tables` exists to
+# exploit. Costs ~30 KB of heap per live table handle in the host app.
+poprf-ristretto = { path = "../poprf-ristretto", version = "0.2.0", default-features = false, features = ["std", "fast-dleq", "precomputed-tables"] }
 base64 = { version = "0.23", default-features = false, features = ["alloc"] }
 rand_core = { version = "0.6", default-features = false, features = ["std", "getrandom"] }
 
 [dev-dependencies]
-poprf-ristretto = { path = "../poprf-ristretto", version = "0.1.0", features = ["std"] }
+poprf-ristretto = { path = "../poprf-ristretto", version = "0.2.0", features = ["std"] }
