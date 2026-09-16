@@ -10,6 +10,7 @@
 
 use core::cell::RefCell;
 use core::ffi::{c_char, c_int};
+use core::mem::MaybeUninit;
 use core::ptr;
 use std::ffi::CString;
 use std::slice;
@@ -516,12 +517,11 @@ pub unsafe extern "C" fn poprf_blind_evaluate_batch(
             return -1;
         }
 
-        // Write through the raw pointer: the out-slots are typically
-        // uninitialised, and a `&mut [_]` over uninit memory is UB.
+        let out_eval_slice = slice::from_raw_parts_mut(out_evaluated, n);
         for (i, e) in evaluateds.into_iter().enumerate() {
-            out_evaluated.add(i).write(Box::into_raw(Box::new(e)));
+            out_eval_slice[i] = Box::into_raw(Box::new(e));
         }
-        out_proof.write(Box::into_raw(Box::new(proof)));
+        *out_proof = Box::into_raw(Box::new(proof));
         0
     }
 }
@@ -708,17 +708,16 @@ pub unsafe extern "C" fn poprf_evaluate_tables(
                 return -1;
             }
         };
-        // Bounds the unchecked `add(i)` loop below, which unlike an indexed
-        // slice would happily write past the caller's array.
         if outputs.len() != n {
             set_error("output count mismatch");
             return -1;
         }
 
-        // Write through the raw pointer: the out-slots are typically
-        // uninitialised, and a `&mut [_]` over uninit memory is UB.
-        for (i, o) in outputs.into_iter().enumerate() {
-            out_outputs.add(i).write(Box::into_raw(Box::new(o)));
+        // A C caller's out-array is normally uninitialised, which
+        // `from_raw_parts_mut` forbids unless the element type says so.
+        let slots = slice::from_raw_parts_mut(out_outputs.cast::<MaybeUninit<_>>(), n);
+        for (slot, o) in slots.iter_mut().zip(outputs) {
+            slot.write(Box::into_raw(Box::new(o)));
         }
         0
     }
