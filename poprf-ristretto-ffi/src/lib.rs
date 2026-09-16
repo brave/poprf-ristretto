@@ -516,11 +516,12 @@ pub unsafe extern "C" fn poprf_blind_evaluate_batch(
             return -1;
         }
 
-        let out_eval_slice = slice::from_raw_parts_mut(out_evaluated, n);
+        // Write through the raw pointer: the out-slots are typically
+        // uninitialised, and a `&mut [_]` over uninit memory is UB.
         for (i, e) in evaluateds.into_iter().enumerate() {
-            out_eval_slice[i] = Box::into_raw(Box::new(e));
+            out_evaluated.add(i).write(Box::into_raw(Box::new(e)));
         }
-        *out_proof = Box::into_raw(Box::new(proof));
+        out_proof.write(Box::into_raw(Box::new(proof)));
         0
     }
 }

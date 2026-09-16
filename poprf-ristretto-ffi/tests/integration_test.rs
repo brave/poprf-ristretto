@@ -161,13 +161,14 @@ fn server_side_round_trip_via_c_abi() {
 // ── batched evaluate over pre-hashed inputs ─────────────────────────────────
 
 /// `poprf_evaluate_tables` must agree with `poprf_evaluate` per input,
-/// across `info` values and with repeated tables in one batch.
+/// across `info` values.
 #[test]
 fn evaluate_tables_via_c_abi() {
     let seed: Vec<u8> = (0u8..32).collect();
     let seed_info = b"poprf-ffi-integration-test";
-    // Repeat is non-adjacent, so a permuted out-slot cannot pass unnoticed.
-    let inputs: [&[u8]; 3] = [b"tok-0", b"tok-1", b"tok-0"];
+    // All distinct: any permutation of the out-slots changes at least one.
+    // A repeated input would make its two slots interchangeable.
+    let inputs: [&[u8]; 3] = [b"tok-0", b"tok-1", b"tok-2"];
 
     unsafe {
         let sk = poprf_secret_key_from_seed(
