@@ -288,9 +288,10 @@ PoprfOutput *poprf_evaluate(const SecretKey *sk,
  * setup across later [`poprf_evaluate_tables`] calls (see
  * `PoprfInputTable` in `poprf-ristretto`).
  *
- * On success, returns an owned `PoprfInputTable *` that must be freed
- * via [`poprf_input_table_destroy`]. Returns NULL on error; the cause
- * is available via [`poprf_last_error_message`].
+ * On success, returns an owned `const PoprfInputTable *` that must be
+ * freed via [`poprf_input_table_destroy`]. Returns NULL on error; the
+ * cause is available via [`poprf_last_error_message`]. The table is
+ * immutable once built.
  *
  * `input` MUST be smaller than `2^16 - 1` bytes per RFC 9497 §5.1.
  *
@@ -299,7 +300,7 @@ PoprfOutput *poprf_evaluate(const SecretKey *sk,
  * - `input_ptr` must be either NULL with `input_len == 0`, or point to
  *   `input_len` initialised bytes.
  */
-PoprfInputTable *poprf_input_table_new(const uint8_t *input_ptr, uintptr_t input_len);
+const PoprfInputTable *poprf_input_table_new(const uint8_t *input_ptr, uintptr_t input_len);
 
 /**
  * Free a [`PoprfInputTable`] returned by [`poprf_input_table_new`].
@@ -309,7 +310,7 @@ PoprfInputTable *poprf_input_table_new(const uint8_t *input_ptr, uintptr_t input
  * `t` must be either NULL or a pointer previously returned by this
  * library and not yet destroyed. Double-free is undefined behaviour.
  */
-void poprf_input_table_destroy(PoprfInputTable *t);
+void poprf_input_table_destroy(const PoprfInputTable *t);
 
 /**
  * Batched offline evaluation over pre-hashed inputs (RFC 9497 §3.3.3

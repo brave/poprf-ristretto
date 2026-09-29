@@ -181,7 +181,7 @@ fn evaluate_tables_via_c_abi() {
 
         let mut tables: Vec<_> = Vec::new();
         for inp in inputs {
-            let t: *const _ = poprf_input_table_new(inp.as_ptr(), inp.len());
+            let t = poprf_input_table_new(inp.as_ptr(), inp.len());
             assert!(!t.is_null(), "input_table_new failed");
             tables.push(t);
         }
@@ -244,7 +244,7 @@ fn evaluate_tables_via_c_abi() {
         poprf_output_destroy(s);
 
         for t in tables {
-            poprf_input_table_destroy(t as *mut _);
+            poprf_input_table_destroy(t);
         }
         poprf_secret_key_destroy(sk);
     }

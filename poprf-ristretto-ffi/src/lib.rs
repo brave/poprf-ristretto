@@ -591,9 +591,10 @@ pub unsafe extern "C" fn poprf_evaluate(
 /// setup across later [`poprf_evaluate_tables`] calls (see
 /// `PoprfInputTable` in `poprf-ristretto`).
 ///
-/// On success, returns an owned `PoprfInputTable *` that must be freed
-/// via [`poprf_input_table_destroy`]. Returns NULL on error; the cause
-/// is available via [`poprf_last_error_message`].
+/// On success, returns an owned `const PoprfInputTable *` that must be
+/// freed via [`poprf_input_table_destroy`]. Returns NULL on error; the
+/// cause is available via [`poprf_last_error_message`]. The table is
+/// immutable once built.
 ///
 /// `input` MUST be smaller than `2^16 - 1` bytes per RFC 9497 §5.1.
 ///
@@ -605,7 +606,7 @@ pub unsafe extern "C" fn poprf_evaluate(
 pub unsafe extern "C" fn poprf_input_table_new(
     input_ptr: *const u8,
     input_len: usize,
-) -> *mut PoprfInputTable {
+) -> *const PoprfInputTable {
     unsafe {
         clear_error();
         let input = match bytes_from_raw(input_ptr, input_len) {
@@ -619,7 +620,7 @@ pub unsafe extern "C" fn poprf_input_table_new(
             Ok(t) => Box::into_raw(Box::new(t)),
             Err(e) => {
                 set_error(&format!("PoprfInputTable::new: {e}"));
-                ptr::null_mut()
+                ptr::null()
             }
         }
     }
@@ -632,10 +633,10 @@ pub unsafe extern "C" fn poprf_input_table_new(
 /// `t` must be either NULL or a pointer previously returned by this
 /// library and not yet destroyed. Double-free is undefined behaviour.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn poprf_input_table_destroy(t: *mut PoprfInputTable) {
+pub unsafe extern "C" fn poprf_input_table_destroy(t: *const PoprfInputTable) {
     unsafe {
         if !t.is_null() {
-            drop(Box::from_raw(t));
+            drop(Box::from_raw(t.cast_mut()));
         }
     }
 }

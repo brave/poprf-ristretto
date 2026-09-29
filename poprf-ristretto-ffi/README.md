@@ -45,7 +45,7 @@ and `poprf_last_error_message` are freed with `poprf_c_char_destroy`.
 | `EvaluatedElement *` | `poprf_blind_evaluate_batch` (one per token) |
 | `Proof *`            | `poprf_blind_evaluate_batch` |
 | `PoprfOutput *`      | `poprf_evaluate`, `poprf_evaluate_tables` (one per table) |
-| `PoprfInputTable *`  | `poprf_input_table_new` |
+| `const PoprfInputTable *` | `poprf_input_table_new` |
 
 No FFI function other than the destructors takes ownership of or mutates
 its handle arguments. Higher-level bindings should wrap each
