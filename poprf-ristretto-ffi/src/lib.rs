@@ -642,7 +642,7 @@ pub unsafe extern "C" fn poprf_input_table_destroy(t: *const PoprfInputTable) {
 }
 
 /// Batched offline evaluation over pre-hashed inputs (RFC 9497 §3.3.3
-/// `Evaluate`), sharing one `t` derivation and field inversion per call.
+/// `Evaluate`), sharing one `t` derivation and scalar inversion per call.
 ///
 /// Each output is byte-identical to `poprf_evaluate(sk, T_i.input, info)`.
 ///
@@ -656,7 +656,8 @@ pub unsafe extern "C" fn poprf_input_table_destroy(t: *const PoprfInputTable) {
 /// - `sk` must be a valid non-NULL pointer to a `SecretKey` returned by
 ///   this library.
 /// - `tables_arr` must be a valid non-NULL pointer to `n` consecutive
-///   `*const PoprfInputTable` pointers, each valid and not yet destroyed.
+///   `*const PoprfInputTable` pointers, suitably aligned, each valid and
+///   not destroyed until this call returns.
 /// - `info_ptr` must be either NULL with `info_len == 0`, or point to
 ///   `info_len` initialised bytes.
 /// - `out_outputs` must be a valid non-NULL pointer to `n` writable
@@ -690,19 +691,16 @@ pub unsafe extern "C" fn poprf_evaluate_tables(
             }
         };
 
-        // Collect refs without cloning the tables (a table is ~30 KB).
         let ptrs = slice::from_raw_parts(tables_arr, n);
-        let mut tables: Vec<&PoprfInputTable> = Vec::with_capacity(n);
-        for (i, p) in ptrs.iter().enumerate() {
-            if p.is_null() {
-                set_error(&format!("null PoprfInputTable at index {i}"));
-                return -1;
-            }
-            tables.push(&**p);
+        if let Some(i) = ptrs.iter().position(|p| p.is_null()) {
+            set_error(&format!("null PoprfInputTable at index {i}"));
+            return -1;
         }
+        // `&T` has `*const T`'s layout; all non-null and live per contract.
+        let tables = slice::from_raw_parts(tables_arr.cast::<&PoprfInputTable>(), n);
 
         let server = PoprfServer::new((*sk).clone());
-        let outputs = match server.evaluate_tables(&tables, info) {
+        let outputs = match server.evaluate_tables(tables, info) {
             Ok(t) => t,
             Err(e) => {
                 set_error(&format!("evaluate_tables: {e}"));
