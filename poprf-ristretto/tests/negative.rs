@@ -360,6 +360,12 @@ fn blind_evaluate_rejects_inverse_zero() {
         Error::Inverse,
         "Evaluate: InverseError not raised for t=0"
     );
+    let table = PoprfInputTable::new(b"any-input").unwrap();
+    assert_eq!(
+        server.evaluate_tables(&[&table], info).unwrap_err(),
+        Error::Inverse,
+        "evaluate_tables: InverseError not raised for t=0"
+    );
 }
 
 // ── §5.1 input length cap (2^16 - 1 bytes) ───────────────────────────────────

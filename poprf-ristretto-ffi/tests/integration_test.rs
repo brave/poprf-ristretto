@@ -20,10 +20,11 @@ use poprf_ristretto_ffi::{
     poprf_blind_evaluate_batch, poprf_blinded_element_decode_base64, poprf_blinded_element_destroy,
     poprf_c_char_destroy, poprf_evaluate, poprf_evaluate_tables, poprf_evaluated_element_destroy,
     poprf_evaluated_element_encode_base64, poprf_input_table_destroy, poprf_input_table_new,
-    poprf_output_destroy, poprf_output_encode_base64, poprf_output_eq_base64, poprf_proof_destroy,
-    poprf_proof_encode_base64, poprf_public_key_destroy, poprf_public_key_encode_base64,
-    poprf_public_key_from_secret, poprf_secret_key_decode_base64, poprf_secret_key_destroy,
-    poprf_secret_key_encode_base64, poprf_secret_key_from_seed,
+    poprf_last_error_message, poprf_output_destroy, poprf_output_encode_base64,
+    poprf_output_eq_base64, poprf_proof_destroy, poprf_proof_encode_base64,
+    poprf_public_key_destroy, poprf_public_key_encode_base64, poprf_public_key_from_secret,
+    poprf_secret_key_decode_base64, poprf_secret_key_destroy, poprf_secret_key_encode_base64,
+    poprf_secret_key_from_seed,
 };
 
 use std::ffi::CStr;
@@ -246,6 +247,139 @@ fn evaluate_tables_via_c_abi() {
         for t in tables {
             poprf_input_table_destroy(t);
         }
+        poprf_secret_key_destroy(sk);
+    }
+}
+
+/// Last error for this thread, or `None` if cleared.
+unsafe fn last_error() -> Option<String> {
+    unsafe {
+        let p = poprf_last_error_message();
+        (!p.is_null()).then(|| take_cstring(p))
+    }
+}
+
+/// Each rejected argument must fail with -1, set the error, and leave the
+/// out slots untouched; a following success must clear the error.
+#[test]
+fn evaluate_tables_rejects_bad_args_via_c_abi() {
+    let seed: Vec<u8> = (0u8..32).collect();
+    let too_long = vec![0x41u8; (1usize << 16) - 1];
+
+    unsafe {
+        let sk = poprf_secret_key_from_seed(seed.as_ptr(), seed.len(), b"k".as_ptr(), 1);
+        assert!(!sk.is_null());
+        let t = poprf_input_table_new(b"tok".as_ptr(), 3);
+        assert!(!t.is_null());
+        let tables = [t];
+
+        let s = poprf_evaluate(sk, b"s".as_ptr(), 1, b"s".as_ptr(), 1);
+        assert!(!s.is_null());
+        let sentinels = [s];
+        let null_sk: *const _ = std::ptr::null();
+
+        // (label, sk, tables_arr, info_ptr, info_len, use_null_out)
+        let cases = [
+            ("null sk", null_sk, tables.as_ptr(), b"x".as_ptr(), 1, false),
+            ("null tables", sk, std::ptr::null(), b"x".as_ptr(), 1, false),
+            ("null out", sk, tables.as_ptr(), b"x".as_ptr(), 1, true),
+            (
+                "null info, len>0",
+                sk,
+                tables.as_ptr(),
+                std::ptr::null(),
+                1,
+                false,
+            ),
+            (
+                "oversized info",
+                sk,
+                tables.as_ptr(),
+                too_long.as_ptr(),
+                too_long.len(),
+                false,
+            ),
+        ];
+        for (label, k, arr, ip, il, null_out) in cases {
+            let mut outs = sentinels;
+            let out = if null_out {
+                std::ptr::null_mut()
+            } else {
+                outs.as_mut_ptr()
+            };
+            assert_eq!(poprf_evaluate_tables(k, arr, 1, ip, il, out), -1, "{label}");
+            assert!(last_error().is_some(), "{label}: no error set");
+            assert_eq!(outs, sentinels, "{label}: wrote outputs");
+        }
+
+        // NULL info with len 0 is the empty info, and success clears the error.
+        let mut outs = [std::ptr::null_mut()];
+        let rc = poprf_evaluate_tables(
+            sk,
+            tables.as_ptr(),
+            1,
+            std::ptr::null(),
+            0,
+            outs.as_mut_ptr(),
+        );
+        assert_eq!(rc, 0);
+        assert_eq!(last_error(), None, "success must clear last error");
+        let single = poprf_evaluate(sk, b"tok".as_ptr(), 3, std::ptr::null(), 0);
+        assert_eq!(
+            take_cstring(poprf_output_encode_base64(outs[0])),
+            take_cstring(poprf_output_encode_base64(single))
+        );
+        poprf_output_destroy(single);
+        poprf_output_destroy(outs[0]);
+
+        poprf_output_destroy(s);
+        poprf_input_table_destroy(t);
+        poprf_secret_key_destroy(sk);
+    }
+}
+
+/// Input edges: NULL/length pairs, the §5.1 boundary, duplicates, NULL destroy.
+#[test]
+fn input_table_edges_via_c_abi() {
+    let seed: Vec<u8> = (0u8..32).collect();
+    let max_ok = vec![0x42u8; (1usize << 16) - 2];
+    let too_long = vec![0x42u8; (1usize << 16) - 1];
+
+    unsafe {
+        let sk = poprf_secret_key_from_seed(seed.as_ptr(), seed.len(), b"k".as_ptr(), 1);
+        assert!(!sk.is_null());
+
+        assert!(poprf_input_table_new(std::ptr::null(), 1).is_null());
+        assert!(last_error().is_some(), "NULL+len>0: no error set");
+        assert!(poprf_input_table_new(too_long.as_ptr(), too_long.len()).is_null());
+        assert!(last_error().is_some(), "oversized input: no error set");
+
+        let empty = poprf_input_table_new(std::ptr::null(), 0);
+        assert!(!empty.is_null(), "NULL+0 is the empty input");
+        assert_eq!(last_error(), None, "success must clear last error");
+        let max = poprf_input_table_new(max_ok.as_ptr(), max_ok.len());
+        assert!(!max.is_null(), "2^16-2 bytes must be accepted");
+
+        // Same pointer twice: both slots get the same output.
+        let tables = [empty, max, empty];
+        let mut outs = [std::ptr::null_mut(); 3];
+        let rc = poprf_evaluate_tables(sk, tables.as_ptr(), 3, b"i".as_ptr(), 1, outs.as_mut_ptr());
+        assert_eq!(rc, 0);
+        let expect_empty = poprf_evaluate(sk, std::ptr::null(), 0, b"i".as_ptr(), 1);
+        let expect_max = poprf_evaluate(sk, max_ok.as_ptr(), max_ok.len(), b"i".as_ptr(), 1);
+        let enc = |o| take_cstring(poprf_output_encode_base64(o));
+        let (e, m) = (enc(expect_empty), enc(expect_max));
+        assert_eq!(
+            [enc(outs[0]), enc(outs[1]), enc(outs[2])],
+            [e.clone(), m, e]
+        );
+        for o in outs.into_iter().chain([expect_empty, expect_max]) {
+            poprf_output_destroy(o);
+        }
+
+        poprf_input_table_destroy(std::ptr::null()); // no-op
+        poprf_input_table_destroy(empty);
+        poprf_input_table_destroy(max);
         poprf_secret_key_destroy(sk);
     }
 }

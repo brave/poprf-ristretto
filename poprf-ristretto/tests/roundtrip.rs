@@ -101,6 +101,59 @@ fn poprf_evaluate_tables_matches_evaluate() {
     );
 }
 
+/// Owning containers satisfy the `Borrow` bound and agree with `&T`.
+#[test]
+fn poprf_evaluate_tables_accepts_box_and_arc() {
+    use std::sync::Arc;
+
+    let server = PoprfServer::generate(&mut OsRng);
+    let inputs: &[&[u8]] = &[b"alpha", b"beta"];
+    let expected: Vec<_> = inputs
+        .iter()
+        .map(|i| server.evaluate(i, b"info").unwrap())
+        .collect();
+
+    let boxed: Vec<_> = inputs
+        .iter()
+        .map(|i| Box::new(PoprfInputTable::new(i).unwrap()))
+        .collect();
+    let arced: Vec<_> = inputs
+        .iter()
+        .map(|i| Arc::new(PoprfInputTable::new(i).unwrap()))
+        .collect();
+    assert_eq!(server.evaluate_tables(&boxed, b"info").unwrap(), expected);
+    assert_eq!(server.evaluate_tables(&arced, b"info").unwrap(), expected);
+}
+
+/// One table set shared by concurrent evaluators (needs `Send + Sync`).
+#[test]
+fn poprf_input_table_shared_across_threads() {
+    let server = PoprfServer::generate(&mut OsRng);
+    let tables: Vec<_> = [b"a", b"b", b"c"]
+        .iter()
+        .map(|i| PoprfInputTable::new(*i).unwrap())
+        .collect();
+    let expected = server.evaluate_tables(&tables, b"info").unwrap();
+
+    std::thread::scope(|s| {
+        let handles: Vec<_> = (0..4)
+            .map(|_| s.spawn(|| server.evaluate_tables(&tables, b"info").unwrap()))
+            .collect();
+        for h in handles {
+            assert_eq!(h.join().unwrap(), expected);
+        }
+    });
+}
+
+/// `Debug` must not print the input (redemption-linkable).
+#[test]
+fn poprf_input_table_debug_redacts_input() {
+    let t = PoprfInputTable::new(b"secret-token-preimage").unwrap();
+    let s = format!("{t:?}");
+    assert_eq!(s, "PoprfInputTable(21 bytes)");
+    assert!(!s.contains("secret"), "Debug leaks input: {s}");
+}
+
 #[test]
 fn poprf_proof_rejects_wrong_pk() {
     let server = PoprfServer::generate(&mut OsRng);

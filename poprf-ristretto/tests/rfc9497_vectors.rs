@@ -5,7 +5,7 @@
 
 use serde::Deserialize;
 
-use poprf_ristretto::{PoprfClient, PoprfServer, derive_key_pair};
+use poprf_ristretto::{PoprfClient, PoprfInputTable, PoprfServer, derive_key_pair};
 
 #[derive(Debug, Deserialize)]
 struct VectorFile {
@@ -151,6 +151,23 @@ fn poprf_ristretto255_sha512() {
                 direct.as_bytes().to_vec(),
                 h(expected),
                 "v{vi}.{i} Evaluate"
+            );
+        }
+
+        // Pre-hashed batch path must hit the same known answers.
+        let tables: Vec<_> = inputs_owned
+            .iter()
+            .map(|x| PoprfInputTable::new(x).expect("PoprfInputTable::new"))
+            .collect();
+        let batch = server
+            .evaluate_tables(&tables, &info)
+            .expect("evaluate_tables");
+        assert_eq!(batch.len(), v.batch_size, "v{vi} evaluate_tables len");
+        for (i, (out, expected)) in batch.iter().zip(v.output.iter()).enumerate() {
+            assert_eq!(
+                out.as_bytes().to_vec(),
+                h(expected),
+                "v{vi}.{i} evaluate_tables"
             );
         }
     }
