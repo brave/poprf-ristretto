@@ -161,8 +161,8 @@ impl fmt::Debug for PoprfOutput {
 /// per *recurring* input, not per call.
 pub struct PoprfInputTable {
     pub(crate) input: Vec<u8>,
-    // Boxed: inline, a 30 KB table would cross every `new` return slot,
-    // and the FFI does not control its caller's stack.
+    // Boxed so the 30 KB table isn't copied through every `new` return
+    // slot; `fixed_base` still builds it on the stack once.
     pub(crate) base: Box<group::FixedBase>,
 }
 
