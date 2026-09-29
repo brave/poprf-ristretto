@@ -613,7 +613,7 @@ pub unsafe extern "C" fn poprf_input_table_new(
             Some(i) => i,
             None => {
                 set_error("invalid input pointer");
-                return ptr::null_mut();
+                return ptr::null();
             }
         };
         match PoprfInputTable::new(input) {
