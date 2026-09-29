@@ -33,7 +33,8 @@ crate directly.
 ## Object model and ownership
 
 All POPRF types are opaque handles owned by Rust. Every constructor
-returns `*mut T`; every type has a matching `poprf_*_destroy` (safe to
+returns `T *` (`const` for the immutable `PoprfInputTable`); every type
+has a matching `poprf_*_destroy` (safe to
 call with `NULL`). Owned `char *` strings returned by `*_encode_base64`
 and `poprf_last_error_message` are freed with `poprf_c_char_destroy`.
 
@@ -70,7 +71,8 @@ if (err != NULL) {
 
 - Every handle type is `Send + Sync`, so any handle — including one
   `PoprfInputTable` shared across a `poprf_evaluate_tables` fan-out —
-  may be used concurrently from any number of threads.
+  may be used concurrently from any number of threads (destructors
+  excepted, see below).
 - Constructors that need randomness use a CSPRNG seeded from the OS
   (`OsRng`); there is no global mutable state.
 - `LAST_ERROR` is thread-local — errors set on one thread are not visible
