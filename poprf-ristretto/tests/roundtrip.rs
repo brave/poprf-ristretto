@@ -3,8 +3,8 @@
 use rand_core::OsRng;
 
 use poprf_ristretto::{
-    BlindedElement, Error, EvaluatedElement, PoprfBlindState, PoprfClient, PoprfOutput,
-    PoprfServer, Proof, PublicKey, SecretKey,
+    BlindedElement, Error, EvaluatedElement, PoprfBlindState, PoprfClient, PoprfInputTable,
+    PoprfOutput, PoprfServer, Proof, PublicKey, SecretKey,
 };
 
 #[test]
@@ -59,6 +59,99 @@ fn poprf_different_info_yields_different_output() {
     let a = server.evaluate(b"x", b"info1").unwrap();
     let b = server.evaluate(b"x", b"info2").unwrap();
     assert_ne!(a, b);
+}
+
+// ── batched offline evaluation over pre-hashed inputs ────────────────────────
+
+/// `evaluate_tables` must equal per-call `evaluate` term-for-term:
+/// same inputs (repeated and reordered), same key, many `info` values.
+#[test]
+fn poprf_evaluate_tables_matches_evaluate() {
+    let server = PoprfServer::generate(&mut OsRng);
+
+    let inputs: &[&[u8]] = &[b"alpha", b"beta", b"gamma", b"", b"delta"];
+    let tables: Vec<_> = inputs
+        .iter()
+        .map(|i| PoprfInputTable::new(i).unwrap())
+        .collect();
+    let refs: Vec<&PoprfInputTable> = tables.iter().collect();
+
+    let infos: &[&[u8]] = &[b"batch-info", b"", b"another-info"];
+    for info in infos {
+        let expected: Vec<_> = inputs
+            .iter()
+            .map(|i| server.evaluate(i, info).unwrap())
+            .collect();
+        let got = server.evaluate_tables(&refs, info).unwrap();
+        assert_eq!(got, expected, "evaluate_tables != evaluate for {info:?}");
+        // Pins the owned-slice side of the `Borrow` bound.
+        assert_eq!(server.evaluate_tables(&tables, info).unwrap(), expected);
+    }
+
+    // Each slot must follow its own table, under repeats and reordering.
+    let shuffled = vec![refs[3], refs[0], refs[0], refs[2]];
+    let got = server.evaluate_tables(&shuffled, b"batch-info").unwrap();
+    let expect0 = server.evaluate(b"alpha", b"batch-info").unwrap();
+    let expect2 = server.evaluate(b"gamma", b"batch-info").unwrap();
+    let expect3 = server.evaluate(b"", b"batch-info").unwrap();
+    assert_eq!(
+        got,
+        vec![expect3, expect0.clone(), expect0, expect2],
+        "repeated/reordered batch diverges"
+    );
+}
+
+/// Owning containers satisfy the `Borrow` bound and agree with `&T`.
+#[test]
+fn poprf_evaluate_tables_accepts_box_and_arc() {
+    use std::sync::Arc;
+
+    let server = PoprfServer::generate(&mut OsRng);
+    let inputs: &[&[u8]] = &[b"alpha", b"beta"];
+    let expected: Vec<_> = inputs
+        .iter()
+        .map(|i| server.evaluate(i, b"info").unwrap())
+        .collect();
+
+    let boxed: Vec<_> = inputs
+        .iter()
+        .map(|i| Box::new(PoprfInputTable::new(i).unwrap()))
+        .collect();
+    let arced: Vec<_> = inputs
+        .iter()
+        .map(|i| Arc::new(PoprfInputTable::new(i).unwrap()))
+        .collect();
+    assert_eq!(server.evaluate_tables(&boxed, b"info").unwrap(), expected);
+    assert_eq!(server.evaluate_tables(&arced, b"info").unwrap(), expected);
+}
+
+/// One table set shared by concurrent evaluators (needs `Send + Sync`).
+#[test]
+fn poprf_input_table_shared_across_threads() {
+    let server = PoprfServer::generate(&mut OsRng);
+    let tables: Vec<_> = [b"a", b"b", b"c"]
+        .iter()
+        .map(|i| PoprfInputTable::new(*i).unwrap())
+        .collect();
+    let expected = server.evaluate_tables(&tables, b"info").unwrap();
+
+    std::thread::scope(|s| {
+        let handles: Vec<_> = (0..4)
+            .map(|_| s.spawn(|| server.evaluate_tables(&tables, b"info").unwrap()))
+            .collect();
+        for h in handles {
+            assert_eq!(h.join().unwrap(), expected);
+        }
+    });
+}
+
+/// `Debug` must not print the input (redemption-linkable).
+#[test]
+fn poprf_input_table_debug_redacts_input() {
+    let t = PoprfInputTable::new(b"secret-token-preimage").unwrap();
+    let s = format!("{t:?}");
+    assert_eq!(s, "PoprfInputTable(21 bytes)");
+    assert!(!s.contains("secret"), "Debug leaks input: {s}");
 }
 
 #[test]

@@ -20,7 +20,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # See poprf-ristretto-ffi/Cargo.toml for why both `path` and `version`.
-poprf-ristretto = { path = "../poprf-ristretto", version = "0.1.0", default-features = false, features = ["std", "fast-dleq"] }
+poprf-ristretto = { path = "../poprf-ristretto", version = "0.2.0", default-features = false, features = ["std", "fast-dleq"] }
 # `getrandom`'s `js` feature wires `OsRng` to `crypto.getRandomValues` on
 # wasm32-unknown-unknown; without it `rand_core::OsRng` panics at runtime.
 getrandom = { version = "0.2", default-features = false, features = ["js"] }
@@ -36,4 +36,4 @@ js-sys = { version = "0.3", default-features = false }
 wasm-bindgen-test = "0.3"
 # Server-side eval (PoprfServer) lives in the core crate and is not part
 # of the wasm shim's public surface; pulled in for the smoke test only.
-poprf-ristretto = { path = "../poprf-ristretto", version = "0.1.0", features = ["std", "fast-dleq"] }
+poprf-ristretto = { path = "../poprf-ristretto", version = "0.2.0", features = ["std", "fast-dleq"] }

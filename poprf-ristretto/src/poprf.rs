@@ -1,6 +1,7 @@
 //! POPRF protocol (see: RFC 9497 §3.3.3).
 //! <https://www.rfc-editor.org/rfc/rfc9497.txt>
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt;
 
@@ -16,7 +17,7 @@ use crate::dleq::{Proof, generate_proof, generate_proof_with_r, verify_proof};
 use crate::error::Error;
 use crate::group;
 use crate::key::{PublicKey, SecretKey, derive_key_pair, generate_key_pair};
-use crate::util::{HASH_TO_GROUP_DST, HASH_TO_SCALAR_DST, append_lp, check_lp_len, i2osp_2};
+use crate::util::{HASH_TO_GROUP_DST, HASH_TO_SCALAR_DST, check_lp_len, i2osp_2};
 
 /// SHA-512 output length, used as the POPRF output length (`Nh`).
 const HASH_LEN: usize = 64;
@@ -145,6 +146,49 @@ impl AsRef<[u8]> for PoprfOutput {
 impl fmt::Debug for PoprfOutput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PoprfOutput(<redacted>)")
+    }
+}
+
+// ── pre-hashed input for batched offline evaluation ──────────────────────────
+
+/// A pre-hashed POPRF input, for repeated offline evaluation of the same
+/// input under different `info` values (see
+/// [`PoprfServer::evaluate_tables`]).
+///
+/// Not zeroized (dalek's table has no `Zeroize`): it holds multiples of
+/// `HashToGroup(input)` and SHA-512 state over `input`, so treat it as
+/// sensitive as `input`. Under `precomputed-tables` the build costs ~15
+/// `evaluate` calls, so build one per *recurring* input, not per call.
+pub struct PoprfInputTable {
+    // Finalize hashes `input` first, so absorb it once here, not per `info`.
+    pub(crate) prefix: Sha512,
+    pub(crate) input_len: usize,
+    // Boxed so the 30 KB table isn't copied through every `new` return
+    // slot; `fixed_base` still builds it on the stack once.
+    pub(crate) base: Box<group::FixedBase>,
+}
+
+impl PoprfInputTable {
+    /// Hash `input` once, moving [`PoprfServer::evaluate`]'s input checks
+    /// to build time.
+    pub fn new(input: &[u8]) -> Result<Self, Error> {
+        check_lp_len(input)?;
+        let p = group::hash_to_group(&[input], HASH_TO_GROUP_DST);
+        // Same rejection as `evaluate`: the identity carries no input.
+        if bool::from(group::is_identity(&p)) {
+            return Err(Error::InvalidInput);
+        }
+        Ok(Self {
+            prefix: lp_hasher(input),
+            input_len: input.len(),
+            base: Box::new(group::fixed_base(&p)),
+        })
+    }
+}
+
+impl fmt::Debug for PoprfInputTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "PoprfInputTable({} bytes)", self.input_len)
     }
 }
 
@@ -579,11 +623,34 @@ impl PoprfServer {
         Ok(finalize_hash(input, info, &issued))
     }
 
+    /// Batched `Evaluate` over pre-hashed inputs (RFC 9497 §3.3.3): each
+    /// output is byte-identical to [`PoprfServer::evaluate`] for the same
+    /// input, sharing one `t = skS + m` derivation and scalar inversion
+    /// across the batch. Constant-time in `skS` and `t`.
+    pub fn evaluate_tables<T: core::borrow::Borrow<PoprfInputTable>>(
+        &self,
+        tables: &[T],
+        info: &[u8],
+    ) -> Result<Vec<PoprfOutput>, Error> {
+        if tables.is_empty() {
+            return Err(Error::LengthMismatch);
+        }
+        // One hash-to-scalar + inversion per batch, not per input.
+        let t_inv = group::scalar_invert(&self.compute_t(info)?);
+        Ok(tables
+            .iter()
+            .map(|tb| {
+                let tb = tb.borrow();
+                let e = group::scalar_mul_fixed(&t_inv, &tb.base);
+                finalize_from(tb.prefix.clone(), info, &group::serialize_element_array(&e))
+            })
+            .collect())
+    }
+
     /// Compute `t = skS + m` where `m = HashToScalar(framedInfo)`.
     ///
     /// Enforces the RFC 9497 §5.1 length cap on `info`; every server path
-    /// that consumes `info` (`blind_evaluate*`, `evaluate`) routes through
-    /// this function, so the check lives here once.
+    /// that consumes `info` routes through here, so the check lives once.
     fn compute_t(&self, info: &[u8]) -> Result<Scalar, Error> {
         check_lp_len(info)?;
         let framed = framed_info(info);
@@ -620,20 +687,22 @@ fn framed_info(info: &[u8]) -> Vec<u8> {
 /// `Hash(I2OSP(len(input),2) || input || I2OSP(len(info),2) || info ||
 ///       I2OSP(len(unblinded),2) || unblinded || "Finalize")`.
 fn finalize_hash(input: &[u8], info: &[u8], unblinded: &[u8]) -> PoprfOutput {
-    let mut buf = Vec::with_capacity(
-        2 + input.len() + 2 + info.len() + 2 + unblinded.len() + b"Finalize".len(),
-    );
-    append_lp(&mut buf, input);
-    append_lp(&mut buf, info);
-    append_lp(&mut buf, unblinded);
-    buf.extend_from_slice(b"Finalize");
+    finalize_from(lp_hasher(input), info, unblinded)
+}
 
-    let mut hasher = Sha512::default();
-    Update::update(&mut hasher, &buf);
-    let digest = FixedOutput::finalize_fixed(hasher);
-    let mut out = [0u8; HASH_LEN];
-    out.copy_from_slice(&digest[..]);
-    PoprfOutput(out)
+/// SHA-512 after absorbing `I2OSP(len(input), 2) || input`.
+fn lp_hasher(input: &[u8]) -> Sha512 {
+    Sha512::default().chain(i2osp_2(input.len())).chain(input)
+}
+
+/// Finish [`finalize_hash`] from a [`lp_hasher`] prefix.
+fn finalize_from(prefix: Sha512, info: &[u8], unblinded: &[u8]) -> PoprfOutput {
+    let h = prefix.chain(i2osp_2(info.len())).chain(info);
+    let h = h
+        .chain(i2osp_2(unblinded.len()))
+        .chain(unblinded)
+        .chain(b"Finalize");
+    PoprfOutput(h.finalize_fixed().into())
 }
 
 fn debug_hex(f: &mut fmt::Formatter<'_>, name: &str, bytes: &[u8]) -> fmt::Result {

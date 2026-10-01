@@ -4,6 +4,7 @@
 #   make headers          regenerate the FFI C header.
 #   make check-headers    fail if the checked-in header is stale (CI gate).
 #   make test             run the workspace test suite with all features.
+#   make test-no-default  run the core suite with `precomputed-tables` off.
 #   make clippy           run clippy across the workspace with `-D warnings`.
 #   make fmt              apply rustfmt to the workspace.
 #   make check-fmt        fail if rustfmt would modify any file.
@@ -53,7 +54,7 @@ WASM_PACK_VERSION ?= 0.15.0
 DOCKER    ?= docker
 DOCKER_IMAGE_TAG ?= poprf-ristretto-build:local
 
-.PHONY: all headers check-headers test clippy fmt check-fmt \
+.PHONY: all headers check-headers test test-no-default clippy fmt check-fmt \
         ffi-release wasm wasm-nodejs wasm-test wasm-tarball \
         publish-dry-run clean wasm-pack-install wasm-docker
 
@@ -79,6 +80,11 @@ check-headers:
 
 test:
 	$(CARGO) test --workspace --all-features
+
+# `--all-features` compiles out `group::FixedBase`'s bare-point fallback,
+# so that path needs its own run — a broken one once passed `make test`.
+test-no-default:
+	$(CARGO) test -p poprf-ristretto --no-default-features --features std,fast-dleq
 
 clippy:
 	$(CARGO) clippy --workspace --all-targets --all-features -- -D warnings

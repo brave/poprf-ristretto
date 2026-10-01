@@ -43,11 +43,10 @@ Each output directory contains `package.json`, JS glue, TypeScript
 declarations, and the `.wasm` binary, importable as a local package.
 
 The wasm crate depends on `poprf-ristretto` with `default-features =
-false` plus `["std", "fast-dleq"]`; the core crate's
-`precomputed-tables` feature is **not** enabled, keeping the wasm
-binary smaller at the cost of slower base-point scalar multiplication.
-Edit [`Cargo.toml`](./Cargo.toml) to add it back if size is not a
-concern.
+false` plus `["std", "fast-dleq"]`. `precomputed-tables` is **not**
+enabled and should stay off: it only accelerates `PoprfInputTable`, a
+server-side type this crate does not expose, so enabling it buys
+nothing here.
 
 ## Usage
 
