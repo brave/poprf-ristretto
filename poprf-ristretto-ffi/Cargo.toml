@@ -27,7 +27,7 @@ crate-type = ["cdylib", "rlib"]
 # evaluated ~50+ times, at ~30 KB of heap each. See the README.
 poprf-ristretto = { path = "../poprf-ristretto", version = "0.2.0", default-features = false, features = ["std", "fast-dleq", "precomputed-tables"] }
 base64 = { version = "0.23", default-features = false, features = ["alloc"] }
-rand_core = { version = "0.6", default-features = false, features = ["std", "getrandom"] }
+rand_core = { version = "0.10", default-features = false, features = ["std", "getrandom"] }
 
 [dev-dependencies]
 poprf-ristretto = { path = "../poprf-ristretto", version = "0.2.0", features = ["std"] }
