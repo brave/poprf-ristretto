@@ -320,13 +320,7 @@ impl PoprfClient {
         // truncation that would desynchronise the `Finalize` transcript.
         check_lp_len(input)?;
         check_lp_len(info)?;
-        let framed = framed_info(info);
-        let m = group::hash_to_scalar(&[&framed], HASH_TO_SCALAR_DST);
-        let t = group::scalar_mul_gen(&m);
-        let tweaked_key = group::element_add(&t, &self.pk);
-        if bool::from(group::is_identity(&tweaked_key)) {
-            return Err(Error::InvalidInput);
-        }
+        let tweaked_key = self.tweaked_key(info)?;
 
         let input_element = group::hash_to_group(&[input], HASH_TO_GROUP_DST);
         if bool::from(group::is_identity(&input_element)) {
@@ -356,6 +350,11 @@ impl PoprfClient {
         // RFC 9497 §5.1 length cap (see `blind_with_inner`).
         check_lp_len(input)?;
         check_lp_len(info)?;
+        // The proof is bound to the state's tweakedKey, so without this a
+        // different key or info than at `blind` would pass and yield garbage.
+        if !bool::from(state.tweaked_key.ct_eq(&self.tweaked_key(info)?)) {
+            return Err(Error::InconsistentState);
+        }
         let g = group::generator();
         verify_proof(&g, &state.tweaked_key, &[evaluated.0], &[blinded.0], proof)?;
         Ok(self.unblind_and_hash(input, info, state, evaluated))
@@ -385,13 +384,13 @@ impl PoprfClient {
         }
         // A batched POPRF finalize covers a single (client, info) tuple, so
         // every state in the batch must carry the same `tweakedKey`. The
-        // DLEQ proof is verified once against `states[0].tweaked_key`; if
-        // any other state disagreed, the corresponding per-token
+        // DLEQ proof is verified once against the one derived from `info`;
+        // if any state disagreed, the corresponding per-token
         // `unblind_and_hash` would still produce a value, but that value
         // would NOT match the server's `Evaluate(input_i, info)` output —
         // a silent desynchronisation. Reject up-front instead.
-        let tweaked_key = states[0].tweaked_key;
-        for s in &states[1..] {
+        let tweaked_key = self.tweaked_key(info)?;
+        for s in states {
             if !bool::from(s.tweaked_key.ct_eq(&tweaked_key)) {
                 return Err(Error::InconsistentState);
             }
@@ -406,6 +405,16 @@ impl PoprfClient {
             out.push(self.unblind_and_hash(input, info, state, e));
         }
         Ok(out)
+    }
+
+    // `tweakedKey = G * HashToScalar(framedInfo) + pkS` (RFC 9497 §3.3.3 `Blind`).
+    fn tweaked_key(&self, info: &[u8]) -> Result<RistrettoPoint, Error> {
+        let m = group::hash_to_scalar(&[&framed_info(info)], HASH_TO_SCALAR_DST);
+        let tweaked_key = group::element_add(&group::scalar_mul_gen(&m), &self.pk);
+        if bool::from(group::is_identity(&tweaked_key)) {
+            return Err(Error::InvalidInput);
+        }
+        Ok(tweaked_key)
     }
 
     fn unblind_and_hash(

@@ -565,6 +565,53 @@ fn finalize_batch_rejects_mismatched_tweaked_key() {
     );
 }
 
+/// Finalizing with a different `info` or public key than at `blind` must be
+/// rejected: the proof only binds the state's tweakedKey, so it would verify
+/// and the outputs would silently mismatch the server's `Evaluate`.
+#[test]
+fn finalize_rejects_info_or_key_other_than_at_blind() {
+    let server = PoprfServer::generate(&mut OsRng);
+    let client = PoprfClient::new(server.public_key());
+    let other = PoprfClient::new(PoprfServer::generate(&mut OsRng).public_key());
+    let info = b"info-a";
+
+    let (state, blinded) = client.blind(b"alpha", info, &mut OsRng).unwrap();
+    let (evaluated, proof) = server.blind_evaluate(&mut OsRng, &blinded, info).unwrap();
+    // Control: the honest finalize succeeds.
+    client
+        .finalize(b"alpha", &state, &evaluated, &blinded, &proof, info)
+        .unwrap();
+
+    for (c, i, what) in [
+        (&client, &b"info-b"[..], "info"),
+        (&other, &info[..], "public key"),
+    ] {
+        let err = c
+            .finalize(b"alpha", &state, &evaluated, &blinded, &proof, i)
+            .unwrap_err();
+        assert_eq!(
+            err,
+            Error::InconsistentState,
+            "finalize: other {what} not detected"
+        );
+        let err = c
+            .finalize_batch(
+                &[b"alpha".as_ref()],
+                core::slice::from_ref(&state),
+                core::slice::from_ref(&evaluated),
+                core::slice::from_ref(&blinded),
+                &proof,
+                i,
+            )
+            .unwrap_err();
+        assert_eq!(
+            err,
+            Error::InconsistentState,
+            "finalize_batch: other {what} not detected"
+        );
+    }
+}
+
 /// Maximum permitted size (`2^16 - 2`) must be accepted on all entry points.
 #[test]
 fn accepts_maximum_input_and_info_lengths() {
