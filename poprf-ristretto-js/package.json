@@ -1,0 +1,33 @@
+{
+  "name": "@brave/poprf-ristretto-js",
+  "version": "0.2.0",
+  "description": "Pure-JS client for poprf-ristretto (RFC 9497 POPRF / ristretto255-SHA512), same API as @brave/poprf-ristretto-wasm",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brave/poprf-ristretto.git",
+    "directory": "poprf-ristretto-js"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "LICENSE-APACHE", "LICENSE-MIT"],
+  "scripts": {
+    "prepack": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test": "tsc --noEmit && node --test 'test/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@noble/curves": "2.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2"
+  }
+}

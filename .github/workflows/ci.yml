@@ -93,13 +93,14 @@ jobs:
       - run: make test
       - run: make test-no-default
 
-  # End-to-end wasm build via the pinned container (see Dockerfile).
+  # End-to-end wasm build via the pinned container (see Dockerfile), plus the
+  # JS package, whose interop tests need the wasm Node build.
   wasm:
     name: wasm build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: make wasm-docker WASM_DOCKER_TARGETS="wasm-tarball wasm-nodejs wasm-test"
+      - run: make wasm-docker WASM_DOCKER_TARGETS="wasm-tarball wasm-nodejs wasm-test js-test js-tarball"
 
   # Catches packaging regressions before any tag/publish: missing tracked
   # files (e.g. .gitignore over-restriction excluding a fixture), missing
@@ -130,3 +131,11 @@ jobs:
       - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  # npm counterpart of the advisory scan above; informational in the same way.
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: make js-audit

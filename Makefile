@@ -18,12 +18,20 @@
 #                         Set WASM_DOCKER_TARGETS to override the inner
 #                         make targets (default: wasm).
 #
+# JS (pure-JS client, no wasm):
+#   make js-test          type-check + node --test (vectors, negatives,
+#                         wasm interop; builds pkg-node/).
+#   make js-tarball       run `npm pack` on poprf-ristretto-js/.
+#   make check-js-version fail if package.json != workspace version (CI gate).
+#   make js-audit         npm audit of the runtime deps.
+#
 # Publish:
 #   make publish-dry-run  cargo publish --dry-run for all three crates
 #                         (verifies packaging, tarball contents, deps).
 #
 # Housekeeping:
-#   make clean            `cargo clean` plus wipe pkg/, pkg-node/, target-docker/.
+#   make clean            `cargo clean` plus wipe pkg/, pkg-node/, target-docker/,
+#                         and the JS package's node_modules/, dist/, *.tgz.
 #
 # Real publishes (crates.io and npm) are intentionally not exposed as
 # Makefile targets. The commands are:
@@ -39,6 +47,10 @@
 #   (cd poprf-ristretto-wasm/pkg && npm publish --access public *.tgz)
 #   npm package: @brave/poprf-ristretto-wasm
 #
+#   make wasm-docker WASM_DOCKER_TARGETS=js-tarball
+#   (cd poprf-ristretto-js && npm publish --access public *.tgz)
+#   npm package: @brave/poprf-ristretto-js
+#
 # `cargo`, `cbindgen`, and `wasm-pack` are invoked through the
 # env-overridable variables below so CI can pin tool versions.
 
@@ -46,6 +58,7 @@ FFI_DIR        := poprf-ristretto-ffi
 FFI_HEADER     := $(FFI_DIR)/include/poprf_ristretto_ffi.h
 FFI_CBINDGEN   := $(FFI_DIR)/cbindgen.toml
 WASM_DIR       := poprf-ristretto-wasm
+JS_DIR         := poprf-ristretto-js
 
 CBINDGEN  ?= cbindgen
 CARGO     ?= cargo
@@ -56,7 +69,8 @@ DOCKER_IMAGE_TAG ?= poprf-ristretto-build:local
 
 .PHONY: all headers check-headers test test-no-default clippy fmt check-fmt \
         ffi-release wasm wasm-nodejs wasm-test wasm-tarball \
-        publish-dry-run clean wasm-pack-install wasm-docker
+        publish-dry-run clean wasm-pack-install wasm-docker \
+        js-test js-tarball check-js-version js-audit
 
 all: headers test clippy
 
@@ -171,6 +185,28 @@ wasm-docker:
 wasm-test: wasm-pack-install
 	PATH="$${CARGO_HOME:-$$HOME/.cargo}/bin:$$PATH" $(WASM_PACK) test --node $(WASM_DIR)
 
+# The interop tests load pkg-node/.
+js-test: wasm-nodejs
+	cd $(JS_DIR) && npm ci && npm test
+
+# `prepack` compiles src/ to dist/. The LICENSEs are copies, not symlinks like the
+# crates': npm pack skips symlinks.
+js-tarball: check-js-version
+	rm -rf $(JS_DIR)/*.tgz
+	cd $(JS_DIR) && npm ci && npm pack
+
+# The JS package is versioned with the workspace, like the crates.
+check-js-version:
+	@ws=$$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml); \
+	js=$$(jq -r .version $(JS_DIR)/package.json); \
+	if [ "$$ws" != "$$js" ]; then \
+		echo "error: $(JS_DIR)/package.json version $$js != workspace version $$ws" >&2; \
+		exit 1; \
+	fi
+
+js-audit:
+	cd $(JS_DIR) && npm audit --omit=dev
+
 # Verify each crate is packageable before tagging a release. Catches
 # dirty git state, missing tracked files, .gitignore over-restriction
 # (e.g. a fixture excluded by accident), missing metadata, and
@@ -197,4 +233,4 @@ publish-dry-run:
 
 clean:
 	$(CARGO) clean
-	rm -rf $(WASM_DIR)/pkg $(WASM_DIR)/pkg-node target-docker
+	rm -rf $(WASM_DIR)/pkg $(WASM_DIR)/pkg-node target-docker $(JS_DIR)/node_modules $(JS_DIR)/dist $(JS_DIR)/*.tgz
