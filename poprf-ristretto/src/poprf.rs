@@ -350,13 +350,14 @@ impl PoprfClient {
         // RFC 9497 §5.1 length cap (see `blind_with_inner`).
         check_lp_len(input)?;
         check_lp_len(info)?;
-        // The proof is bound to the state's tweakedKey, so without this a
-        // different key or info than at `blind` would pass and yield garbage.
-        if !bool::from(state.tweaked_key.ct_eq(&self.tweaked_key(info)?)) {
+        // The state is caller data: another info would verify yet hash to outputs
+        // the server never matches, and another pk would go unchecked.
+        let tweaked_key = self.tweaked_key(info)?;
+        if !bool::from(state.tweaked_key.ct_eq(&tweaked_key)) {
             return Err(Error::InconsistentState);
         }
         let g = group::generator();
-        verify_proof(&g, &state.tweaked_key, &[evaluated.0], &[blinded.0], proof)?;
+        verify_proof(&g, &tweaked_key, &[evaluated.0], &[blinded.0], proof)?;
         Ok(self.unblind_and_hash(input, info, state, evaluated))
     }
 
