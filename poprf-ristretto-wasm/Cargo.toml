@@ -26,7 +26,8 @@ poprf-ristretto = { path = "../poprf-ristretto", version = "0.2.0", default-feat
 getrandom = { version = "0.2", default-features = false, features = ["js"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
 base64 = { version = "0.23", default-features = false, features = ["alloc"] }
-wasm-bindgen = { version = "0.2", default-features = false, features = ["std"] }
+# 0.2.100: the unchecked_*_type attributes and the reference-types setup (see README).
+wasm-bindgen = { version = "0.2.100", default-features = false, features = ["std"] }
 js-sys = { version = "0.3", default-features = false }
 
 [dev-dependencies]
