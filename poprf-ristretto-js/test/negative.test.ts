@@ -274,7 +274,8 @@ test('rejects malformed base64', () => {
     good.slice(0, 42) + B64[B64.indexOf(good[42]!) ^ 1] + '=', // same, one pad
     'A', // length 1 mod 4
     'A===', // three pads
-    good.replace('+', '-').replace('/', '_'), // url-safe alphabet
+    `-${good.slice(1)}`, // url-safe alphabet, not only when good has a '+' or '/'
+    `_${good.slice(1)}`,
   ].filter((s) => s !== good);
   assert.ok(bad.length >= 4);
   for (const s of bad) {
