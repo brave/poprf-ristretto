@@ -78,10 +78,10 @@ jobs:
       fail-fast: false
       matrix:
         # `stable`: catches regressions against the current ecosystem.
-        # `1.87`: enforces the MSRV declared in the workspace Cargo.toml.
-        # Anything broken on 1.87 means rust-version in Cargo.toml is lying.
-        # 1.87 is crypto-bigint 0.7.9's floor (RUSTSEC-2026-0387 fix, via hash2curve).
-        toolchain: [stable, "1.87"]
+        # `1.88`: enforces the MSRV declared in the workspace Cargo.toml.
+        # Anything broken on 1.88 means rust-version in Cargo.toml is lying.
+        # 1.88 is sha2 0.11.1's floor; resolver-2 consumers pick it regardless.
+        toolchain: [stable, "1.88"]
     # rust-toolchain.toml would otherwise override the matrix toolchain.
     env:
       RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
