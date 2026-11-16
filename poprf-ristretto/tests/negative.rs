@@ -316,7 +316,9 @@ fn blind_evaluate_rejects_inverse_zero() {
     // The scalar `m` is HashToScalar(framedInfo) under the DST
     // "HashToScalar-OPRFV1-\x02-ristretto255-SHA512". Replicate the derivation
     // here without using internal crate helpers.
-    use elliptic_curve::hash2curve::{ExpandMsg, ExpandMsgXmd, Expander};
+    use core::num::NonZero;
+    use digest::typenum::U16;
+    use hash2curve::{ExpandMsg, ExpandMsgXmd, Expander};
     use sha2::Sha512;
 
     let ctx: &[u8] = b"OPRFV1-\x02-ristretto255-SHA512";
@@ -329,9 +331,13 @@ fn blind_evaluate_rejects_inverse_zero() {
 
     let mut uniform = [0u8; 64];
     let dsts = [dst.as_slice()];
-    let mut expander =
-        <ExpandMsgXmd<Sha512> as ExpandMsg<'_>>::expand_message(&[&framed], &dsts, 64).unwrap();
-    expander.fill_bytes(&mut uniform);
+    let mut expander = <ExpandMsgXmd<Sha512> as ExpandMsg<U16>>::expand_message(
+        &[&framed],
+        &dsts,
+        NonZero::new(64).unwrap(),
+    )
+    .unwrap();
+    expander.fill_bytes(&mut uniform).unwrap();
     let m = Scalar::from_bytes_mod_order_wide(&uniform);
 
     // sk = -m; serialize and reconstitute through SecretKey::from_bytes.
