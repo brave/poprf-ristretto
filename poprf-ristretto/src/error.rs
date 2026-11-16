@@ -14,7 +14,7 @@ pub enum Error {
     /// zero `SecretKey` scalar (RFC 9497 §3.2.1).
     InputValidation,
     /// `Blind` rejected an input that maps to the group identity element,
-    /// or POPRF `Blind` produced a `tweakedKey` equal to the identity.
+    /// or POPRF `Blind`/`Finalize` derived a `tweakedKey` equal to the identity.
     InvalidInput,
     /// Batched API received slices of disagreeing length, or an empty batch.
     LengthMismatch,

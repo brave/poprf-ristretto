@@ -383,13 +383,8 @@ impl PoprfClient {
         for input in inputs {
             check_lp_len(input)?;
         }
-        // A batched POPRF finalize covers a single (client, info) tuple, so
-        // every state in the batch must carry the same `tweakedKey`. The
-        // DLEQ proof is verified once against the one derived from `info`;
-        // if any state disagreed, the corresponding per-token
-        // `unblind_and_hash` would still produce a value, but that value
-        // would NOT match the server's `Evaluate(input_i, info)` output —
-        // a silent desynchronisation. Reject up-front instead.
+        // As in `finalize`: every state must come from this pk and info, and the
+        // one DLEQ proof is verified against the tweakedKey derived from them.
         let tweaked_key = self.tweaked_key(info)?;
         for s in states {
             if !bool::from(s.tweaked_key.ct_eq(&tweaked_key)) {
