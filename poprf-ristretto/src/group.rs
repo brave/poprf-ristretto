@@ -121,7 +121,7 @@ pub(crate) fn hash_to_scalar(inputs: &[&[u8]], dst: &[u8]) -> Scalar {
 fn expand_message_xmd_64(inputs: &[&[u8]], dst: &[u8]) -> [u8; 64] {
     let mut uniform_bytes = [0u8; 64];
     let dsts = [dst];
-    // U16: ristretto255's 128-bit security level (RFC 9380 §8.9), in bytes.
+    // U16: 128-bit security level k, in bytes; for XMD only a bound on the hash size.
     let mut expander = <ExpandMsgXmd<Sha512> as ExpandMsg<U16>>::expand_message(
         inputs,
         &dsts,
