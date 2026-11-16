@@ -520,11 +520,9 @@ fn rejects_oversized_input_and_info() {
 
 // ── finalize_batch tweakedKey consistency ────────────────────────────────────
 
-/// `finalize_batch` must reject `PoprfBlindState` slices whose `tweakedKey`s
-/// disagree. Such a batch can only arise from a buggy caller mixing states
-/// produced for different `info` values into one batch; if accepted it would
-/// pass DLEQ verification against `states[0]`'s tweakedKey but produce
-/// silently incorrect outputs for the divergent entries.
+/// `finalize_batch` must reject a batch mixing states blinded under different
+/// `info` values: the divergent entries would yield outputs the server never
+/// matches.
 #[test]
 fn finalize_batch_rejects_mismatched_tweaked_key() {
     let server = PoprfServer::generate(&mut OsRng);
@@ -534,7 +532,7 @@ fn finalize_batch_rejects_mismatched_tweaked_key() {
     let info_b = b"info-b";
 
     // Produce a valid batch of size 1 under info_a so the DLEQ proof matches
-    // states[0]'s tweakedKey.
+    // info_a's tweakedKey.
     let (state_a, blinded_a) = client.blind(b"alpha", info_a, &mut OsRng).unwrap();
     let (evaluated_a, proof_a) = server
         .blind_evaluate(&mut OsRng, &blinded_a, info_a)
@@ -542,7 +540,7 @@ fn finalize_batch_rejects_mismatched_tweaked_key() {
 
     // Build a divergent state under info_b. The blinded/evaluated pair is
     // irrelevant to the consistency check — we want to hit InconsistentState
-    // before any crypto runs.
+    // before DLEQ verification.
     let (state_b, blinded_b) = client.blind(b"beta", info_b, &mut OsRng).unwrap();
     let (evaluated_b, _) = server
         .blind_evaluate(&mut OsRng, &blinded_b, info_b)
@@ -563,6 +561,53 @@ fn finalize_batch_rejects_mismatched_tweaked_key() {
         Error::InconsistentState,
         "mismatched tweakedKey not detected"
     );
+}
+
+/// Finalizing with a different `info` or public key than at `blind` must be
+/// rejected: another `info` would yield outputs the server's `Evaluate` never
+/// matches, and another key would not be checked against the proof.
+#[test]
+fn finalize_rejects_info_or_key_other_than_at_blind() {
+    let server = PoprfServer::generate(&mut OsRng);
+    let client = PoprfClient::new(server.public_key());
+    let other = PoprfClient::new(PoprfServer::generate(&mut OsRng).public_key());
+    let info = b"info-a";
+
+    let (state, blinded) = client.blind(b"alpha", info, &mut OsRng).unwrap();
+    let (evaluated, proof) = server.blind_evaluate(&mut OsRng, &blinded, info).unwrap();
+    // Control: the honest finalize succeeds.
+    client
+        .finalize(b"alpha", &state, &evaluated, &blinded, &proof, info)
+        .unwrap();
+
+    for (c, i, what) in [
+        (&client, &b"info-b"[..], "info"),
+        (&other, &info[..], "public key"),
+    ] {
+        let err = c
+            .finalize(b"alpha", &state, &evaluated, &blinded, &proof, i)
+            .unwrap_err();
+        assert_eq!(
+            err,
+            Error::InconsistentState,
+            "finalize: other {what} not detected"
+        );
+        let err = c
+            .finalize_batch(
+                &[b"alpha".as_ref()],
+                core::slice::from_ref(&state),
+                core::slice::from_ref(&evaluated),
+                core::slice::from_ref(&blinded),
+                &proof,
+                i,
+            )
+            .unwrap_err();
+        assert_eq!(
+            err,
+            Error::InconsistentState,
+            "finalize_batch: other {what} not detected"
+        );
+    }
 }
 
 /// Maximum permitted size (`2^16 - 2`) must be accepted on all entry points.

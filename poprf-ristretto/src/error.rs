@@ -14,7 +14,7 @@ pub enum Error {
     /// zero `SecretKey` scalar (RFC 9497 §3.2.1).
     InputValidation,
     /// `Blind` rejected an input that maps to the group identity element,
-    /// or POPRF `Blind` produced a `tweakedKey` equal to the identity.
+    /// or POPRF `Blind`/`Finalize` derived a `tweakedKey` equal to the identity.
     InvalidInput,
     /// Batched API received slices of disagreeing length, or an empty batch.
     LengthMismatch,
@@ -29,10 +29,10 @@ pub enum Error {
     /// requires both to be smaller than `2^16 - 1` bytes (they are
     /// length-prefixed with two bytes throughout the protocol).
     InputTooLong,
-    /// `finalize_batch` was called with `PoprfBlindState` entries whose
-    /// `tweakedKey` values disagree. A batched POPRF finalize covers a
-    /// single `(client, info)` tuple, so every state must share the same
-    /// `tweakedKey` (RFC 9497 §3.3.3).
+    /// `finalize` / `finalize_batch` got a `PoprfBlindState` whose
+    /// `tweakedKey` disagrees with the one derived from the public key and
+    /// `info`. A batched POPRF finalize covers a single `(client, info)`
+    /// tuple, so every state must carry that `tweakedKey` (RFC 9497 §3.3.3).
     InconsistentState,
 }
 
@@ -47,7 +47,7 @@ impl fmt::Display for Error {
             Error::Inverse => "inversion of zero scalar",
             Error::DeriveKeyPair => "DeriveKeyPair counter exhausted",
             Error::InputTooLong => "input or info length must be smaller than 2^16 - 1 bytes",
-            Error::InconsistentState => "PoprfBlindState entries disagree on tweakedKey",
+            Error::InconsistentState => "PoprfBlindState tweakedKey disagrees with pk and info",
         };
         f.write_str(s)
     }

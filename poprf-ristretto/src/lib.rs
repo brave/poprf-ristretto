@@ -77,7 +77,8 @@
 //! * **`info` parameter.** Both client and server must agree on `info`
 //!   out-of-band. A mismatch yields [`Error::Verify`] on the client (the
 //!   reconstructed `tweakedKey` will not match the server's), not silent
-//!   garbage.
+//!   garbage; another `info` or public key at finalize than at blind yields
+//!   [`Error::InconsistentState`].
 //! * **Domain separation.** Every hash invocation is namespaced with a DST
 //!   of the form `<label> || "OPRFV1-" || I2OSP(mode, 1) || "-" || suite_id`
 //!   per RFC 9497 §3.1 / §4.
