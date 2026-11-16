@@ -5,6 +5,7 @@
 //! and exposes no curve types in its public API.
 
 use alloc::vec::Vec;
+use core::num::NonZero;
 
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 #[cfg(feature = "precomputed-tables")]
@@ -12,7 +13,8 @@ use curve25519_dalek::ristretto::RistrettoBasepointTable;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
-use elliptic_curve::hash2curve::{ExpandMsg, ExpandMsgXmd, Expander};
+use digest::typenum::U16;
+use hash2curve::{ExpandMsg, ExpandMsgXmd, Expander};
 use rand_core::{CryptoRng, RngCore};
 use sha2::Sha512;
 use subtle::{Choice, ConstantTimeEq};
@@ -106,23 +108,30 @@ pub(crate) fn is_identity(element: &RistrettoPoint) -> Choice {
 
 /// `HashToGroup(input, dst)` — RFC 9497 §4.1 / RFC 9380 §4.
 pub(crate) fn hash_to_group(inputs: &[&[u8]], dst: &[u8]) -> RistrettoPoint {
-    let mut uniform_bytes = [0u8; 64];
-    let dsts = [dst];
-    let mut expander = <ExpandMsgXmd<Sha512> as ExpandMsg<'_>>::expand_message(inputs, &dsts, 64)
-        .expect("expand_message_xmd cannot fail with valid params");
-    expander.fill_bytes(&mut uniform_bytes);
-    RistrettoPoint::from_uniform_bytes(&uniform_bytes)
+    RistrettoPoint::from_uniform_bytes(&expand_message_xmd_64(inputs, dst))
 }
 
 /// `HashToScalar(input, dst)` — RFC 9497 §4.1 / RFC 9380 §4.
 pub(crate) fn hash_to_scalar(inputs: &[&[u8]], dst: &[u8]) -> Scalar {
+    // RFC 9497 §4.1: interpret as 512-bit little-endian integer mod Order.
+    Scalar::from_bytes_mod_order_wide(&expand_message_xmd_64(inputs, dst))
+}
+
+/// RFC 9380 `expand_message_xmd` with SHA-512 to 64 bytes.
+fn expand_message_xmd_64(inputs: &[&[u8]], dst: &[u8]) -> [u8; 64] {
     let mut uniform_bytes = [0u8; 64];
     let dsts = [dst];
-    let mut expander = <ExpandMsgXmd<Sha512> as ExpandMsg<'_>>::expand_message(inputs, &dsts, 64)
-        .expect("expand_message_xmd cannot fail with valid params");
-    expander.fill_bytes(&mut uniform_bytes);
-    // RFC 9497 §4.1: interpret as 512-bit little-endian integer mod Order.
-    Scalar::from_bytes_mod_order_wide(&uniform_bytes)
+    // U16: 128-bit security level k, in bytes; for XMD only a bound on the hash size.
+    let mut expander = <ExpandMsgXmd<Sha512> as ExpandMsg<U16>>::expand_message(
+        inputs,
+        &dsts,
+        NonZero::new(64).unwrap(),
+    )
+    .expect("expand_message_xmd cannot fail with valid params");
+    expander
+        .fill_bytes(&mut uniform_bytes)
+        .expect("expander holds the 64 bytes requested");
+    uniform_bytes
 }
 
 /// `RandomScalar()` — uniformly random nonzero scalar.
