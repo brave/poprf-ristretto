@@ -191,6 +191,14 @@ test('rejects a sparse inputs array', () => {
   assert.throws(() => finalize({ ...b, inputs: sparse }), /expected Uint8Array/);
 });
 
+// JS-only: elements are read by index up to length, as in wasm, not through the array's iterator.
+test('finalizes by index, ignoring an overridden array iterator', () => {
+  const b = honest([enc.encode('a'), enc.encode('b')]);
+  const swapped = [...b.inputs];
+  swapped[Symbol.iterator] = () => [...b.inputs].reverse().values();
+  assert.deepEqual(finalize({ ...b, inputs: swapped }), finalize(b));
+});
+
 // JS-only: the up-front key check must not reject a valid key with nothing to blind.
 test('blinds an empty batch', () => assert.deepEqual(blindBatch(pk, [], info), { states: [], blindedMessages: [] }));
 

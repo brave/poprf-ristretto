@@ -43,9 +43,11 @@ export function finalizeBatch(
     throw new Error('finalize_batch: array length mismatch');
   }
   if (n === 0) throw new Error('finalize_batch: empty batch');
-  for (const input of inputs) checkLength(input, 'finalize_batch');
-  // Array.from, not map: map skips holes, which then reach noble as undefined.
-  const items = Array.from(inputs, (input, i) => {
+  // By index up to n, like wasm: an array's own iterator could yield other elements,
+  // and holes come out undefined for noble's type check (map would skip them).
+  const items = Array.from({ length: n }, (_, i) => {
+    const input = inputs[i]!;
+    checkLength(input, 'finalize_batch');
     const state = b64decode(states[i]!, 'state', 64);
     // Every state must come from this pk and info (as in the Rust core): a clear error
     // instead of a failed proof against the tweaked key derived above.
