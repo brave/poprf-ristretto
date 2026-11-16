@@ -10,6 +10,7 @@ this package only adds the wasm package's encoding, state layout and input valid
 
 Use it where WebAssembly is unavailable (e.g. V8 `--jitless`, which removes
 `WebAssembly` entirely), or where 16 KB gzip of JS beats ~54 KB of wasm.
+Prefer the wasm package where available: this one is not constant-time (see below).
 
 ## API
 
