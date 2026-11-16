@@ -184,6 +184,15 @@ test('rejects mismatched batch array lengths', () => {
   assert.throws(() => finalize({ ...b, evaluated: [...b.evaluated, b.evaluated[0]!] }), lengthMismatch);
 });
 
+// JS-only: as above for blind; finalize by index must then pair each input with its own blind.
+test('blinds by index, ignoring an overridden array iterator', () => {
+  const inputs = [enc.encode('a'), enc.encode('b')];
+  const swapped = [...inputs];
+  swapped[Symbol.iterator] = () => [...inputs].reverse().values();
+  const out = finalize({ ...honest(swapped), inputs });
+  assert.deepEqual(out, inputs.map((x) => b64(ristretto255_oprf.poprf(info).evaluate(server.secretKey, x))));
+});
+
 // JS-only: a hole in inputs gets the input type check, not an internal TypeError.
 test('rejects a sparse inputs array', () => {
   const b = honest([enc.encode('a'), enc.encode('b')]);

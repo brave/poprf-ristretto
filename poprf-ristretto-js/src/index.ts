@@ -16,7 +16,9 @@ export function blindBatch(publicKeyB64: string, inputs: Uint8Array[], info: Uin
   deriveTweakedKey(poprf, pk);
   const states: string[] = [];
   const blindedMessages: string[] = [];
-  for (const input of inputs) {
+  // By index, like wasm and finalizeBatch: an overridden iterator would misalign the states.
+  for (let i = 0; i < inputs.length; i++) {
+    const input = inputs[i]!;
     checkLength(input, 'blind');
     const { blind, blinded, tweakedKey } = poprf.blind(input, pk);
     states.push(b64encode(concatBytes(blind, tweakedKey)));
