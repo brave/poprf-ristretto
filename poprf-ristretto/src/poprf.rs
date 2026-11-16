@@ -350,13 +350,14 @@ impl PoprfClient {
         // RFC 9497 §5.1 length cap (see `blind_with_inner`).
         check_lp_len(input)?;
         check_lp_len(info)?;
-        // The proof is bound to the state's tweakedKey, so without this a
-        // different key or info than at `blind` would pass and yield garbage.
-        if !bool::from(state.tweaked_key.ct_eq(&self.tweaked_key(info)?)) {
+        // The state is caller data: another info would verify yet hash to outputs
+        // the server never matches, and another pk would go unchecked.
+        let tweaked_key = self.tweaked_key(info)?;
+        if !bool::from(state.tweaked_key.ct_eq(&tweaked_key)) {
             return Err(Error::InconsistentState);
         }
         let g = group::generator();
-        verify_proof(&g, &state.tweaked_key, &[evaluated.0], &[blinded.0], proof)?;
+        verify_proof(&g, &tweaked_key, &[evaluated.0], &[blinded.0], proof)?;
         Ok(self.unblind_and_hash(input, info, state, evaluated))
     }
 
@@ -382,13 +383,8 @@ impl PoprfClient {
         for input in inputs {
             check_lp_len(input)?;
         }
-        // A batched POPRF finalize covers a single (client, info) tuple, so
-        // every state in the batch must carry the same `tweakedKey`. The
-        // DLEQ proof is verified once against the one derived from `info`;
-        // if any state disagreed, the corresponding per-token
-        // `unblind_and_hash` would still produce a value, but that value
-        // would NOT match the server's `Evaluate(input_i, info)` output —
-        // a silent desynchronisation. Reject up-front instead.
+        // As in `finalize`: every state must come from this pk and info, and the
+        // one DLEQ proof is verified against the tweakedKey derived from them.
         let tweaked_key = self.tweaked_key(info)?;
         for s in states {
             if !bool::from(s.tweaked_key.ct_eq(&tweaked_key)) {
