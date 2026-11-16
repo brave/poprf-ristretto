@@ -47,8 +47,8 @@ export function finalizeBatch(
   // Array.from, not map: map skips holes, which then reach noble as undefined.
   const items = Array.from(inputs, (input, i) => {
     const state = b64decode(states[i]!, 'state', 64);
-    // The proof only binds the states' tweaked key but the output hashes info: a state
-    // blinded under other info would verify and silently yield outputs the server won't match.
+    // Every state must come from this pk and info (as in the Rust core): a clear error
+    // instead of a failed proof against the tweaked key derived above.
     if (!equalBytes(state.subarray(32), tweakedKey)) {
       throw new Error('finalize_batch: state does not match the public key and info');
     }
