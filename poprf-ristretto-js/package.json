@@ -21,7 +21,7 @@
   "files": ["dist", "LICENSE-APACHE", "LICENSE-MIT"],
   "scripts": {
     "prepack": "rm -rf dist && tsc -p tsconfig.build.json",
-    "test": "tsc --noEmit && node --test 'test/**/*.test.ts'"
+    "test": "tsc --noEmit && node --test 'test/**/*.test.ts' && tsc -p tsconfig.build.json && node --jitless test/jitless.mjs"
   },
   "dependencies": {
     "@noble/curves": "2.4.0"

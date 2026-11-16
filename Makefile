@@ -20,7 +20,8 @@
 #
 # JS (pure-JS client, no wasm):
 #   make js-test          type-check + node --test (vectors, negatives,
-#                         wasm interop; builds pkg-node/).
+#                         wasm interop; builds pkg-node/), then dist/ under
+#                         node --jitless.
 #   make js-tarball       run `npm pack` on poprf-ristretto-js/.
 #   make check-js-version fail if package.json != workspace version (CI gate).
 #   make js-audit         npm audit of the runtime deps.

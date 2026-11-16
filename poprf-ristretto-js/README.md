@@ -68,7 +68,7 @@ No `init()` is needed.
 From the workspace root:
 
 ```sh
-make js-test     # npm ci, tsc --noEmit, node --test; builds pkg-node/ for the interop tests
+make js-test     # npm ci, tsc --noEmit, node --test (builds pkg-node/ for the interop tests), dist/ under --jitless
 make js-tarball  # npm pack (prepack compiles src/ to dist/)
 ```
 
