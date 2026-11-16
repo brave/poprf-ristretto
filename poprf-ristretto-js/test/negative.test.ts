@@ -232,8 +232,7 @@ test('rejects states that disagree on tweakedKey', () => {
   assert.throws(() => finalize(mixed), mismatch);
 });
 
-// JS-only, stricter than wasm 0.2.0, which verifies against the states' tweakedKey,
-// so with another info it returns wrong outputs.
+// finalize_rejects_info_or_key_other_than_at_blind
 test('rejects finalizing under another info or public key than at blind', () => {
   const b = honest();
   const otherPk = b64(ristretto255_oprf.poprf(info).generateKeyPair().publicKey);

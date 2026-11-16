@@ -49,9 +49,6 @@ No `init()` is needed.
   `info` through `TypedArray.set`). On an empty batch `info` is length-checked and a key
   whose tweaked key is the identity is rejected (wasm only decodes the key there), and a
   state with a zero blind is rejected (wasm accepts it and returns a meaningless output).
-- **A `publicKeyB64` or `info` at finalize other than at blind throws.** wasm 0.2.0
-  only parses the finalize key and verifies against the tweaked key inside the states,
-  so with another `info` it silently returns wrong outputs.
 - **Not constant-time.** noble uses JS `BigInt`, unlike the core crate's documented
   constant-time discipline. Client secrets (the per-input blinds, and the inputs via
   hash-to-curve) go through it.
