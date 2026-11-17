@@ -1,9 +1,8 @@
 //! `wasm-bindgen` bindings for the client-side batched POPRF surface
 //! ([`blind_batch`] / [`finalize_batch`]).
 //!
-//! Array parameters use `js_sys::Array` rather than `Vec<js_sys::Uint8Array>`
-//! to avoid the wasm-bindgen externref vector transform, which requires a
-//! CLI version with externref table support.
+//! Array parameters take `js_sys::Array`; the `.d.ts` element types come from
+//! `unchecked_param_type`.
 
 #![forbid(unsafe_code)]
 
