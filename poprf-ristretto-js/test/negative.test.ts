@@ -309,6 +309,9 @@ test('rejects non-Uint8Array inputs and info', () => {
   }
   // wasm would read a non-array's missing `.length` as an empty batch.
   assert.throws(() => blindBatch(pk, new Set([enc.encode('a')]) as unknown as Uint8Array[], info), /inputs must be an array/);
+  for (const k of ['inputs', 'states', 'blinded', 'evaluated'] as const) {
+    assert.throws(() => finalize({ ...b, [k]: new Set<unknown>(b[k]) as never }), /^Error: finalize_batch: arrays expected/);
+  }
 });
 
 // JS-only, mirrors wasm's "<name> must be string" for the string arrays.

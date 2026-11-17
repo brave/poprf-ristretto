@@ -37,6 +37,10 @@ export function finalizeBatch(
   proof: string,
   info: Uint8Array,
 ): string[] {
+  // Like blindBatch: a Set has no .length, so it would read as an empty batch.
+  if (![inputs, states, blindedMessages, evaluatedElements].every(Array.isArray)) {
+    throw new Error('finalize_batch: arrays expected');
+  }
   checkLength(info, 'finalize_batch');
   const poprf = ristretto255_oprf.poprf(info);
   const tweakedKey = deriveTweakedKey(poprf, b64decode(publicKeyB64, 'public_key', 32));
