@@ -18,7 +18,10 @@ Node.js, or any JavaScript runtime by building with [`wasm-pack`].
 | `finalizeBatch(publicKeyB64, inputs, states, blindedMessages, evaluatedElements, proof, info)` | proof verify + unblind |
 
 Wire-format bytes are passed as base64 strings; per-token preimages and
-`info` are `Uint8Array` / raw bytes. Errors are thrown as JS `Error`s.
+`info` are `Uint8Array` / raw bytes. Validation errors are thrown as strings, not
+`Error`s; arguments of the wrong JS type can throw `TypeError`/`RuntimeError` from the glue.
+`finalizeBatch` needs the same `publicKeyB64` and `info` that were passed to `blindBatch`;
+otherwise it throws.
 
 Server-side operations (key generation, `BlindEvaluate`, offline
 `Evaluate`) are not exposed; use

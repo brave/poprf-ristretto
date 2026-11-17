@@ -23,15 +23,16 @@ public and chosen at evaluation time — distinct from plain OPRF (no
 
 ## Workspace layout
 
-This repository is a Cargo workspace with three crates:
+This repository is a Cargo workspace with three crates, plus a pure-JS npm package:
 
-| Crate | Purpose | Audience |
+| Package | Purpose | Audience |
 |-------|---------|----------|
 | [`poprf-ristretto`](./poprf-ristretto) | Core RFC 9497 protocol, no-std capable | Rust callers |
 | [`poprf-ristretto-ffi`](./poprf-ristretto-ffi) | C ABI `cdylib` + generated header | Any FFI-capable runtime (C, C++, Go, Python, …) |
 | [`poprf-ristretto-wasm`](./poprf-ristretto-wasm) | `wasm-bindgen` bindings | Browser / Node.js / bundler consumers |
+| [`poprf-ristretto-js`](./poprf-ristretto-js) | Same client API as the wasm package, pure JS on `@noble/curves` | JS runtimes without WebAssembly |
 
-Each crate has its own README with usage, build, and consumption instructions.
+Each has its own README with usage, build, and consumption instructions.
 
 ## Status
 

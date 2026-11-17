@@ -1,9 +1,8 @@
 //! `wasm-bindgen` bindings for the client-side batched POPRF surface
 //! ([`blind_batch`] / [`finalize_batch`]).
 //!
-//! Array parameters use `js_sys::Array` rather than `Vec<js_sys::Uint8Array>`
-//! to avoid the wasm-bindgen externref vector transform, which requires a
-//! CLI version with externref table support.
+//! Array parameters take `js_sys::Array`; the `.d.ts` element types come from
+//! `unchecked_param_type`.
 
 #![forbid(unsafe_code)]
 
@@ -35,10 +34,15 @@ fn uint8array_to_vec(val: &JsValue) -> Result<Vec<u8>, JsValue> {
 /// Returns an object with shape `{ states: string[], blindedMessages: string[] }`
 /// where each `states[i]` is a base64-encoded 64-byte [`PoprfBlindState`] and
 /// each `blindedMessages[i]` is a base64-encoded 32-byte `BlindedElement`.
-#[wasm_bindgen(js_name = blindBatch)]
+// Unchecked type attrs make the generated d.ts precise, so the JS twin
+// package can type-check against it; runtime behavior is unchanged.
+#[wasm_bindgen(
+    js_name = blindBatch,
+    unchecked_return_type = "{ states: string[]; blindedMessages: string[] }"
+)]
 pub fn blind_batch(
     public_key_b64: &str,
-    inputs: &js_sys::Array,
+    #[wasm_bindgen(unchecked_param_type = "Uint8Array[]")] inputs: &js_sys::Array,
     info: &[u8],
 ) -> Result<JsValue, JsValue> {
     let pk_bytes = B64
@@ -78,13 +82,14 @@ pub fn blind_batch(
 /// - `info`: POPRF info parameter (UTF-8 bytes).
 ///
 /// Returns a JS `Array` of `N` base64-encoded 64-byte [`PoprfOutput`]s.
-#[wasm_bindgen(js_name = finalizeBatch)]
+// Same d.ts rationale as `blind_batch`.
+#[wasm_bindgen(js_name = finalizeBatch, unchecked_return_type = "string[]")]
 pub fn finalize_batch(
     public_key_b64: &str,
-    inputs: &js_sys::Array,
-    states_b64: &js_sys::Array,
-    blindeds_b64: &js_sys::Array,
-    evaluateds_b64: &js_sys::Array,
+    #[wasm_bindgen(unchecked_param_type = "Uint8Array[]")] inputs: &js_sys::Array,
+    #[wasm_bindgen(unchecked_param_type = "string[]")] states_b64: &js_sys::Array,
+    #[wasm_bindgen(unchecked_param_type = "string[]")] blindeds_b64: &js_sys::Array,
+    #[wasm_bindgen(unchecked_param_type = "string[]")] evaluateds_b64: &js_sys::Array,
     proof_b64: &str,
     info: &[u8],
 ) -> Result<js_sys::Array, JsValue> {
