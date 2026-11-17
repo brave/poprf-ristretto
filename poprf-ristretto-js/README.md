@@ -22,7 +22,8 @@ Prefer the wasm package where available: this one is not constant-time (see belo
 Same names, argument order and types as the wasm package; `test/contract.ts` fails
 the type-check if the two ever drift. Wire-format bytes are canonical padded base64
 strings; inputs and `info` are `Uint8Array`. A state is base64 `blind ‖ tweakedKey`
-(64 bytes), so states from one package can be finalized by the other.
+(64 bytes), so states from one package can be finalized by the other. `finalizeBatch`
+needs the same `publicKeyB64` and `info` that were passed to `blindBatch`; otherwise it throws.
 
 Server-side operations are not exposed, as in the wasm package.
 
